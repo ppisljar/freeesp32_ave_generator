@@ -135,20 +135,10 @@
                 screenFlashState.animationId = null;
             }
 
-            // Force turn off flashlight if it was being used
-            if (screenFlashState.currentMode === 'flashlight' || flashlightState.isOn) {
-                console.log('🔦 Force stopping flashlight...');
-                try {
-                    await setFlashlightState(false);
-                    // Double-check by trying again if still on
-                    if (flashlightState.isOn) {
-                        setTimeout(async () => {
-                            await setFlashlightState(false);
-                        }, 100);
-                    }
-                } catch (error) {
-                    console.warn('⚠️ Error stopping flashlight:', error);
-                }
+            // Completely release flashlight if it was being used
+            if (screenFlashState.currentMode === 'flashlight' || flashlightState.hasPermission) {
+                console.log('🔦 Completely releasing flashlight...');
+                await releaseFlashlight();
             }
 
             // Reset overlay to black
@@ -391,21 +381,51 @@
             }
         }
 
-        function releaseFlashlight() {
+        async function releaseFlashlight() {
             console.log('🔦 Releasing flashlight...');
 
-            if (flashlightState.stream) {
-                flashlightState.stream.getTracks().forEach(track => track.stop());
-            }
+            try {
+                // First, turn off the torch
+                if (flashlightState.track) {
+                    try {
+                        await flashlightState.track.applyConstraints({
+                            advanced: [{ torch: false }]
+                        });
+                    } catch (e) {
+                        // Try alternative method
+                        try {
+                            await flashlightState.track.applyConstraints({ torch: false });
+                        } catch (e2) {
+                            console.warn('Failed to turn off torch before release');
+                        }
+                    }
+                }
 
-            flashlightState = {
-                isSupported: false,
-                hasPermission: false,
-                stream: null,
-                track: null,
-                imageCapture: null,
-                isOn: false
-            };
+                // Stop all tracks
+                if (flashlightState.stream) {
+                    flashlightState.stream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log('📹 Camera track stopped');
+                    });
+                }
+
+                // Reset state
+                flashlightState = {
+                    isSupported: false,
+                    hasPermission: false,
+                    stream: null,
+                    track: null,
+                    imageCapture: null,
+                    isOn: false,
+                    lastUpdateTime: 0,
+                    debugMode: true
+                };
+
+                console.log('✅ Flashlight released');
+
+            } catch (error) {
+                console.error('❌ Error releasing flashlight:', error);
+            }
         }
 
         function enterFullscreen() {
@@ -1018,18 +1038,18 @@
 
         async function stopEverything() {
             console.log("🛑 Stopping everything...");
-            console.log(`Timeline playing: ${isTimelinePlaying}`);
+
+            // Emergency stop flashlight first
+            await emergencyStopFlashlight();
 
             // Stop timeline if running
             if (isTimelinePlaying) {
                 console.log("Calling stopTimeline()...");
                 stopTimeline();
-            } else {
-                console.log("Timeline not playing, skipping stopTimeline()");
             }
 
-            // Force stop visual flashing and flashlight
-            console.log("Force stopping visual effects...");
+            // Stop visual flashing
+            console.log("Stopping visual effects...");
             await stopScreenFlashing();
 
             // Stop all individual frequencies
@@ -1620,11 +1640,50 @@
             }, fadeDuration * 1000);
         }
 
+        // Emergency stop function for flashlight
+        async function emergencyStopFlashlight() {
+            console.log('🚨 Emergency stop flashlight');
+
+            try {
+                // Try multiple methods to turn off
+                if (flashlightState.track) {
+                    // Method 1: ImageCapture API
+                    if (flashlightState.imageCapture) {
+                        try {
+                            await flashlightState.imageCapture.setOptions({ torch: false });
+                        } catch (e) {}
+                    }
+
+                    // Method 2: Track constraints (advanced)
+                    try {
+                        await flashlightState.track.applyConstraints({
+                            advanced: [{ torch: false }]
+                        });
+                    } catch (e) {}
+
+                    // Method 3: Track constraints (direct)
+                    try {
+                        await flashlightState.track.applyConstraints({ torch: false });
+                    } catch (e) {}
+                }
+
+                // Always release the camera completely
+                await releaseFlashlight();
+
+            } catch (error) {
+                console.error('❌ Emergency stop failed:', error);
+                // Force release anyway
+                await releaseFlashlight();
+            }
+        }
+
+        // Add emergency stop to all stop buttons
+        window.emergencyStopFlashlight = emergencyStopFlashlight;
+
         // Cleanup flashlight on page unload
         window.addEventListener('beforeunload', function() {
             if (flashlightState.hasPermission) {
-                setFlashlightState(false);
-                releaseFlashlight();
+                emergencyStopFlashlight();
             }
         });
 

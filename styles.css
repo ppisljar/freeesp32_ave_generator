@@ -763,3 +763,78 @@ body {
             background: #f44336;
             color: white;
         }
+
+        /* Background Music Controls */
+        .background-music-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+
+        .music-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .music-source-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .music-file-input,
+        .music-url-input,
+        .music-volume-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .music-file-input label,
+        .music-url-input label,
+        .music-volume-control label {
+            min-width: 60px;
+            font-size: 12px;
+        }
+
+        .music-file-input input[type="file"],
+        .music-url-input input[type="url"] {
+            flex: 1;
+            padding: 4px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .music-volume-control input[type="range"] {
+            flex: 1;
+        }
+
+        .music-volume-control span {
+            min-width: 35px;
+            font-size: 12px;
+        }
+
+        .music-status {
+            padding: 5px;
+            background-color: #e9ecef;
+            border-radius: 3px;
+            font-size: 11px;
+            text-align: center;
+            color: #666;
+        }
+
+        .visual-mode-info,
+        .music-source-controls {
+            margin-top: 5px;
+        }
+
+        .visual-mode-info small {
+            color: #666;
+            font-style: italic;
+        }

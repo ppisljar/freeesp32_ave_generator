@@ -57,6 +57,18 @@
             debugMode: true // Enable for troubleshooting
         };
 
+        // Background music state
+        let backgroundMusicState = {
+            isEnabled: false,
+            audioElement: null,
+            audioSource: null,
+            gainNode: null,
+            isPlaying: false,
+            volume: 0.3,
+            currentFile: null,
+            currentUrl: ''
+        };
+
         async function startScreenFlashing(screenSettings) {
             if (!screenSettings || !screenSettings.enabled) return;
 
@@ -813,6 +825,42 @@
                         <small>Screen: Always works | Flashlight: Mobile only | Auto: Smart detection</small>
                     </div>
                 </div>
+                <div class="keyframe-input">
+                    <label>Background Music</label>
+                    <div class="background-music-controls">
+                        <div class="music-toggle">
+                            <input type="checkbox" id="music-enabled"
+                                   ${backgroundMusicState.isEnabled ? 'checked' : ''}
+                                   onchange="updateBackgroundMusicEnabled(this.checked)">
+                            <label for="music-enabled">Enable</label>
+                        </div>
+                        <div class="music-source-controls">
+                            <div class="music-file-input">
+                                <label>Local File:</label>
+                                <input type="file" id="music-file-input" accept="audio/*"
+                                       onchange="handleMusicFileInput(this.files[0])">
+                            </div>
+                            <div class="music-url-input">
+                                <label>URL:</label>
+                                <input type="url" id="music-url-input" placeholder="https://example.com/music.mp3"
+                                       value="${backgroundMusicState.currentUrl}"
+                                       onchange="handleMusicUrlInput(this.value)">
+                            </div>
+                            <div class="music-volume-control">
+                                <label>Volume:</label>
+                                <input type="range" id="music-volume-slider"
+                                       min="0" max="1" step="0.1" value="${backgroundMusicState.volume}"
+                                       oninput="updateBackgroundMusicVolume(this.value)">
+                                <span id="music-volume-display">${Math.round(backgroundMusicState.volume * 100)}%</span>
+                            </div>
+                        </div>
+                        <div class="music-status" id="music-status">
+                            ${backgroundMusicState.currentFile ? `📁 ${backgroundMusicState.currentFile.name}` :
+                              backgroundMusicState.currentUrl ? `🔗 ${backgroundMusicState.currentUrl.split('/').pop()}` :
+                              '⚪ No music selected'}
+                        </div>
+                    </div>
+                </div>
             `;
         }
 
@@ -920,6 +968,75 @@
             }
         }
 
+        // Background Music UI Handlers
+        function updateBackgroundMusicEnabled(enabled) {
+            backgroundMusicState.isEnabled = enabled;
+
+            // Enable/disable music controls
+            const fileInput = document.getElementById('music-file-input');
+            const urlInput = document.getElementById('music-url-input');
+            const volumeSlider = document.getElementById('music-volume-slider');
+
+            fileInput.disabled = !enabled;
+            urlInput.disabled = !enabled;
+            volumeSlider.disabled = !enabled;
+
+            // Stop music if disabled
+            if (!enabled && backgroundMusicState.isPlaying) {
+                stopBackgroundMusic();
+            }
+
+            console.log(`🎵 Background music ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        async function handleMusicFileInput(file) {
+            if (!file) return;
+
+            try {
+                updateMusicStatus('📁 Loading...');
+                await loadBackgroundMusicFromFile(file);
+                updateMusicStatus(`📁 ${file.name}`);
+
+                // Clear URL input
+                document.getElementById('music-url-input').value = '';
+                backgroundMusicState.currentUrl = '';
+
+            } catch (error) {
+                updateMusicStatus('❌ File load failed');
+                alert('Failed to load audio file. Please check the file format.');
+            }
+        }
+
+        async function handleMusicUrlInput(url) {
+            if (!url.trim()) return;
+
+            try {
+                updateMusicStatus('🔗 Loading...');
+                await loadBackgroundMusicFromUrl(url.trim());
+                updateMusicStatus(`🔗 ${url.split('/').pop()}`);
+
+                // Clear file input
+                document.getElementById('music-file-input').value = '';
+                backgroundMusicState.currentFile = null;
+
+            } catch (error) {
+                updateMusicStatus('❌ URL load failed');
+                alert('Failed to load audio from URL. Please check the URL and CORS settings.');
+            }
+        }
+
+        function updateBackgroundMusicVolume(volume) {
+            setBackgroundMusicVolume(parseFloat(volume));
+            document.getElementById('music-volume-display').textContent = Math.round(volume * 100) + '%';
+        }
+
+        function updateMusicStatus(status) {
+            const statusElement = document.getElementById('music-status');
+            if (statusElement) {
+                statusElement.textContent = status;
+            }
+        }
+
         function updateTimelineInfo() {
             const totalDuration = keyframes.reduce((sum, kf) => sum + kf.length, 0);
             document.getElementById('timeline-current').textContent = `Current: ${keyframes[currentKeyframeIndex]?.title || 'None'}`;
@@ -972,6 +1089,11 @@
             // Reset tracking variables
             window.lastTimelineKeyframe = -1; // Force initial keyframe load
 
+            // Start background music if enabled
+            if (backgroundMusicState.isEnabled) {
+                playBackgroundMusic();
+            }
+
             // Auto-enter fullscreen if any keyframe has screen panels
             const hasScreenPanels = keyframes.some(kf => kf.screenPanel?.enabled);
             if (hasScreenPanels && !isFullscreen) {
@@ -999,6 +1121,9 @@
                 clearInterval(timelineInterval);
                 timelineInterval = null;
             }
+
+            // Stop background music
+            stopBackgroundMusic();
 
             // Clear all animation intervals
             Object.values(animationIntervals).forEach(interval => clearInterval(interval));
@@ -1041,6 +1166,9 @@
 
             // Emergency stop flashlight first
             await emergencyStopFlashlight();
+
+            // Stop background music
+            stopBackgroundMusic();
 
             // Stop timeline if running
             if (isTimelinePlaying) {
@@ -1680,11 +1808,138 @@
         // Add emergency stop to all stop buttons
         window.emergencyStopFlashlight = emergencyStopFlashlight;
 
-        // Cleanup flashlight on page unload
+        // Background Music Functions
+        async function initializeBackgroundMusic() {
+            if (!audioContext) {
+                initAudioContext();
+            }
+
+            // Create audio element for music playback
+            if (!backgroundMusicState.audioElement) {
+                backgroundMusicState.audioElement = new Audio();
+                backgroundMusicState.audioElement.crossOrigin = 'anonymous';
+                backgroundMusicState.audioElement.loop = true;
+
+                // Create Web Audio nodes for volume control
+                try {
+                    backgroundMusicState.audioSource = audioContext.createMediaElementSource(backgroundMusicState.audioElement);
+                    backgroundMusicState.gainNode = audioContext.createGain();
+                    backgroundMusicState.gainNode.gain.value = backgroundMusicState.volume;
+
+                    // Connect to audio context
+                    backgroundMusicState.audioSource.connect(backgroundMusicState.gainNode);
+                    backgroundMusicState.gainNode.connect(audioContext.destination);
+                } catch (error) {
+                    console.warn('⚠️ Web Audio integration failed for background music:', error);
+                }
+            }
+        }
+
+        async function loadBackgroundMusicFromFile(file) {
+            console.log('🎵 Loading background music from file:', file.name);
+
+            try {
+                await initializeBackgroundMusic();
+
+                const url = URL.createObjectURL(file);
+                backgroundMusicState.audioElement.src = url;
+                backgroundMusicState.currentFile = file;
+                backgroundMusicState.currentUrl = '';
+
+                // Clean up previous object URL if any
+                if (backgroundMusicState.audioElement.src && backgroundMusicState.audioElement.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(backgroundMusicState.audioElement.src);
+                }
+
+                return new Promise((resolve, reject) => {
+                    backgroundMusicState.audioElement.onloadeddata = () => {
+                        console.log('✅ Background music file loaded successfully');
+                        resolve();
+                    };
+
+                    backgroundMusicState.audioElement.onerror = (error) => {
+                        console.error('❌ Failed to load background music file:', error);
+                        reject(error);
+                    };
+
+                    backgroundMusicState.audioElement.load();
+                });
+
+            } catch (error) {
+                console.error('❌ Error loading background music file:', error);
+                throw error;
+            }
+        }
+
+        async function loadBackgroundMusicFromUrl(url) {
+            console.log('🎵 Loading background music from URL:', url);
+
+            try {
+                await initializeBackgroundMusic();
+
+                backgroundMusicState.audioElement.src = url;
+                backgroundMusicState.currentFile = null;
+                backgroundMusicState.currentUrl = url;
+
+                return new Promise((resolve, reject) => {
+                    backgroundMusicState.audioElement.onloadeddata = () => {
+                        console.log('✅ Background music URL loaded successfully');
+                        resolve();
+                    };
+
+                    backgroundMusicState.audioElement.onerror = (error) => {
+                        console.error('❌ Failed to load background music URL:', error);
+                        reject(error);
+                    };
+
+                    backgroundMusicState.audioElement.load();
+                });
+
+            } catch (error) {
+                console.error('❌ Error loading background music URL:', error);
+                throw error;
+            }
+        }
+
+        async function playBackgroundMusic() {
+            if (!backgroundMusicState.isEnabled || !backgroundMusicState.audioElement.src) {
+                console.log('🎵 Background music not enabled or no source');
+                return;
+            }
+
+            try {
+                await backgroundMusicState.audioElement.play();
+                backgroundMusicState.isPlaying = true;
+                console.log('🎵 Background music started');
+            } catch (error) {
+                console.error('❌ Failed to play background music:', error);
+            }
+        }
+
+        function stopBackgroundMusic() {
+            if (backgroundMusicState.audioElement && !backgroundMusicState.audioElement.paused) {
+                backgroundMusicState.audioElement.pause();
+                backgroundMusicState.audioElement.currentTime = 0;
+                backgroundMusicState.isPlaying = false;
+                console.log('⏹️ Background music stopped');
+            }
+        }
+
+        function setBackgroundMusicVolume(volume) {
+            backgroundMusicState.volume = Math.max(0, Math.min(1, volume));
+            if (backgroundMusicState.gainNode) {
+                backgroundMusicState.gainNode.gain.value = backgroundMusicState.volume;
+            } else if (backgroundMusicState.audioElement) {
+                backgroundMusicState.audioElement.volume = backgroundMusicState.volume;
+            }
+        }
+
+        // Cleanup on page unload
         window.addEventListener('beforeunload', function() {
             if (flashlightState.hasPermission) {
                 emergencyStopFlashlight();
             }
+            stopBackgroundMusic();
         });
 
         // Initialize keyframe system after both files are loaded

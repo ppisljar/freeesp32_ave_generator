@@ -55,7 +55,7 @@ A sophisticated web-based frequency generator for creating binaural beats, isoch
 
 ## Live Demo
 
-Visit the [GitHub Pages deployment](https://username.github.io/repository-name) to try it out!
+Visit the [GitHub Pages deployment](https://ppisljar.github.io/binaural-frequency-generator/) to try it out!
 
 ---
 

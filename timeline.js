@@ -52,7 +52,9 @@
             stream: null,
             track: null,
             imageCapture: null,
-            isOn: false
+            isOn: false,
+            lastUpdateTime: 0,
+            debugMode: true // Enable for troubleshooting
         };
 
         async function startScreenFlashing(screenSettings) {
@@ -122,7 +124,7 @@
             }
         }
 
-        function stopScreenFlashing() {
+        async function stopScreenFlashing() {
             console.log('⏹️ Stopping visual flashing');
 
             screenFlashState.isActive = false;
@@ -133,9 +135,20 @@
                 screenFlashState.animationId = null;
             }
 
-            // Turn off flashlight if it was being used
-            if (screenFlashState.currentMode === 'flashlight') {
-                setFlashlightState(false);
+            // Force turn off flashlight if it was being used
+            if (screenFlashState.currentMode === 'flashlight' || flashlightState.isOn) {
+                console.log('🔦 Force stopping flashlight...');
+                try {
+                    await setFlashlightState(false);
+                    // Double-check by trying again if still on
+                    if (flashlightState.isOn) {
+                        setTimeout(async () => {
+                            await setFlashlightState(false);
+                        }, 100);
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Error stopping flashlight:', error);
+                }
             }
 
             // Reset overlay to black
@@ -206,10 +219,25 @@
             overlay.style.backgroundColor = isOn ? screenFlashState.currentColor : '#000000';
         }
 
-        function updateFlashlightState(isOn) {
-            // Only update flashlight if state has changed (avoid excessive API calls)
-            if (flashlightState.isOn !== isOn) {
-                setFlashlightState(isOn);
+        async function updateFlashlightState(isOn) {
+            const now = performance.now();
+
+            // Debug timing info
+            if (flashlightState.debugMode) {
+                const timeSinceLastUpdate = now - flashlightState.lastUpdateTime;
+                console.log(`🔦 Flashlight ${isOn ? 'ON' : 'OFF'} (${timeSinceLastUpdate.toFixed(1)}ms since last)`);
+            }
+
+            flashlightState.lastUpdateTime = now;
+
+            // Always try to update flashlight state for proper flickering
+            try {
+                const success = await setFlashlightState(isOn);
+                if (!success && flashlightState.debugMode) {
+                    console.warn('⚠️ Flashlight state change failed');
+                }
+            } catch (error) {
+                console.warn('⚠️ Flashlight control failed:', error);
             }
 
             // Also update screen to show current state (dim visualization)
@@ -336,10 +364,29 @@
                 }
 
                 flashlightState.isOn = enabled;
+                console.log(`🔦 Flashlight state set to: ${enabled}`);
                 return true;
 
             } catch (error) {
                 console.warn(`❌ Failed to ${enabled ? 'enable' : 'disable'} flashlight:`, error.message);
+
+                // Try alternative method if primary fails
+                try {
+                    if (flashlightState.track) {
+                        const capabilities = flashlightState.track.getCapabilities();
+                        if (capabilities.torch) {
+                            await flashlightState.track.applyConstraints({
+                                torch: enabled
+                            });
+                            flashlightState.isOn = enabled;
+                            console.log(`🔦 Flashlight fallback succeeded: ${enabled}`);
+                            return true;
+                        }
+                    }
+                } catch (fallbackError) {
+                    console.warn('❌ Flashlight fallback also failed:', fallbackError.message);
+                }
+
                 return false;
             }
         }
@@ -969,7 +1016,7 @@
             }
         }
 
-        function stopEverything() {
+        async function stopEverything() {
             console.log("🛑 Stopping everything...");
             console.log(`Timeline playing: ${isTimelinePlaying}`);
 
@@ -980,6 +1027,10 @@
             } else {
                 console.log("Timeline not playing, skipping stopTimeline()");
             }
+
+            // Force stop visual flashing and flashlight
+            console.log("Force stopping visual effects...");
+            await stopScreenFlashing();
 
             // Stop all individual frequencies
             console.log("Calling stopAll()...");

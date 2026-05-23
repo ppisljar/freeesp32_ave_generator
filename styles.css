@@ -1,0 +1,765 @@
+body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: white;
+            text-align: center;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-bottom: 1px solid #ddd;
+        }
+
+        .content-wrapper {
+            margin-top: 140px; /* Space for fixed header */
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .frequency-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .frequency-panel:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .frequency-panel.active {
+            border: 2px solid #4CAF50;
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+        }
+
+        .frequency-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            align-items: center;
+        }
+
+        .frequency-input {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .frequency-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .frequency-slider {
+            flex: 1;
+            height: 6px;
+            background: #ddd;
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .frequency-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+
+        .frequency-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+            border: none;
+        }
+
+        .freq-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .freq-btn {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .freq-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .wave-select, .favorites-dropdown {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            background: white;
+        }
+
+        .play-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .play-btn.playing {
+            background: #f44336;
+            color: white;
+        }
+
+        .play-btn:not(.playing) {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .remove-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .add-panel-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .favorites-section {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .add-favorite-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .frequency-display {
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+            min-width: 100px;
+            text-align: center;
+            padding: 5px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+
+        .frequency-input-field {
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+            width: 120px;
+            text-align: center;
+            padding: 5px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+
+        .lock-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: 10px;
+        }
+
+        .lock-dropdown {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            background: white;
+            font-size: 12px;
+        }
+
+        .lock-indicator {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #e3f2fd;
+            color: #1976d2;
+            display: none;
+        }
+
+        .lock-indicator.active {
+            display: inline-block;
+        }
+
+        .isochronic-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .isochronic-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .isochronic-checkbox {
+            transform: scale(1.2);
+        }
+
+        .isochronic-rate-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .isochronic-rate-slider {
+            width: 100px;
+        }
+
+        .isochronic-rate-display {
+            min-width: 60px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .frequency-controls-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .volume-slider, .pan-slider {
+            width: 100px;
+        }
+
+        .pan-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pan-labels {
+            display: flex;
+            justify-content: space-between;
+            width: 100px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .top-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 15px;
+            background: rgba(248, 249, 250, 0.9);
+            border-radius: 8px;
+            border: 2px solid rgba(233, 236, 239, 0.8);
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        .stop-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            min-width: 100px;
+            box-shadow: 0 2px 4px rgba(220,53,69,0.3);
+        }
+
+        .stop-btn:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(220,53,69,0.4);
+        }
+
+        .current-keyframe-info {
+            flex: 1;
+        }
+
+        .keyframe-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+        }
+
+        .keyframe-description {
+            font-size: 14px;
+            color: #666;
+            margin: 2px 0 0 0;
+        }
+
+        .master-controls {
+            text-align: center;
+        }
+
+        .stop-all-btn, .play-all-btn {
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 10px;
+        }
+
+        .stop-all-btn {
+            background: #f44336;
+        }
+
+        .play-all-btn {
+            background: #4CAF50;
+        }
+
+        .save-btn, .load-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 10px;
+        }
+
+        .config-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+        }
+
+        .config-info {
+            flex: 1;
+        }
+
+        .config-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .config-details {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .config-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .config-actions button {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .load-config-btn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .delete-config-btn {
+            background: #f44336;
+            color: white;
+        }
+
+        .predefined-config {
+            background: linear-gradient(135deg, #e8f5e8, #f0f8ff);
+            border-left: 4px solid #4CAF50;
+        }
+
+        .predefined-label {
+            display: inline-block;
+            background: #4CAF50;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 10px;
+        }
+
+        .config-section-header {
+            font-weight: bold;
+            color: #666;
+            margin: 20px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .screen-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .screen-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            align-items: center;
+        }
+
+        .screen-input {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .color-picker {
+            width: 100px;
+            height: 40px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .screen-rate-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .screen-rate-slider {
+            width: 100px;
+        }
+
+        .screen-rate-display {
+            min-width: 60px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .screen-checkbox {
+            transform: scale(1.2);
+        }
+
+        /* Fullscreen mode */
+        .fullscreen-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 10000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            background-color: #000000;
+        }
+
+        .fullscreen-overlay.active {
+            display: flex;
+        }
+
+
+        .main-content {
+            transition: opacity 0.3s ease;
+        }
+
+        .main-content.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Keyframe System */
+        .keyframe-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            border-left: 4px solid #2196F3;
+        }
+
+        .keyframe-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .keyframe-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+
+        .keyframe-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .keyframe-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+        }
+
+        .keyframe-tab {
+            padding: 10px 20px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s;
+        }
+
+        .keyframe-tab.active {
+            background: #2196F3;
+            color: white;
+        }
+
+        .keyframe-tab:hover:not(.active) {
+            background: #e0e0e0;
+        }
+
+        .keyframe-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+
+        .keyframe-input {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .keyframe-input label {
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .keyframe-input input:not([type="range"]), .keyframe-input textarea {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+
+        .keyframe-input textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .animate-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f8ff;
+            border-radius: 5px;
+        }
+
+        .animate-toggle, .fade-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .animate-checkbox, .fade-checkbox {
+            transform: scale(1.1);
+        }
+
+        .fade-settings {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .fade-duration-slider {
+            width: 80px;
+        }
+
+        .fade-duration-display {
+            font-size: 12px;
+            min-width: 40px;
+        }
+
+        .timeline-controls {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .timeline-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .timeline-progress {
+            width: 100%;
+            height: 20px;
+            background: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .timeline-bar {
+            height: 100%;
+            background: #4CAF50;
+            width: 0%;
+            transition: width 0.1s;
+        }
+
+        .timeline-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .play-timeline-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .test-keyframe-btn {
+            background: #ff9800;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 300px;
+            text-align: center;
+        }
+
+        .modal input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+
+        .modal button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .modal .save-btn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .modal .cancel-btn {
+            background: #f44336;
+            color: white;
+        }

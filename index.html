@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frequency Generator</title>
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="header">
+        <div class="master-controls">
+            <button class="add-panel-btn" onclick="addFrequencyPanel()">Add Frequency Panel</button>
+            <button class="save-btn" onclick="openSaveModal()">Save Config</button>
+            <button class="load-btn" onclick="openLoadModal()">Load Config</button>
+        </div>
+    </div>
+
+    <div class="main-content" id="mainContent">
+        <div class="content-wrapper">
+
+        <!-- Keyframe System -->
+        <div class="keyframe-panel">
+            <div class="keyframe-header">
+                <div class="keyframe-title">Keyframe Sequence</div>
+                <div class="keyframe-controls">
+                    <button class="add-panel-btn" onclick="addKeyframe()">Add Keyframe</button>
+                    <button class="test-keyframe-btn" onclick="testCurrentKeyframe()">Test Current</button>
+                    <button class="test-keyframe-btn" onclick="setupScreenAnimationTest()">Setup Animation Test</button>
+                </div>
+            </div>
+
+            <div class="timeline-controls">
+                <div class="timeline-info">
+                    <span id="timeline-current">Current: Key0</span>
+                    <span id="timeline-duration">Total Duration: 0s</span>
+                </div>
+                <div class="timeline-progress">
+                    <div class="timeline-bar" id="timeline-bar"></div>
+                </div>
+                <div class="timeline-buttons">
+                    <button class="play-timeline-btn" id="play-timeline" onclick="playTimeline()">Play Timeline</button>
+                    <button class="stop-all-btn" onclick="stopTimeline()">Stop Timeline</button>
+                </div>
+            </div>
+
+            <div class="keyframe-tabs" id="keyframe-tabs">
+                <!-- Keyframe tabs will be inserted here -->
+            </div>
+
+            <div class="keyframe-details" id="keyframe-details">
+                <!-- Current keyframe details will be shown here -->
+            </div>
+        </div>
+
+        <div id="frequency-panels"></div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Visual Overlay -->
+    <div class="fullscreen-overlay" id="fullscreenOverlay">
+        <div class="top-controls">
+            <button class="stop-btn" onclick="stopEverything()">⏹ STOP</button>
+            <div class="current-keyframe-info">
+                <div class="keyframe-title" id="current-keyframe-title">Frequency Generator</div>
+                <div class="keyframe-description" id="current-keyframe-description">Click Play Timeline to start</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add to Favorites Modal -->
+    <div id="favoriteModal" class="modal">
+        <div class="modal-content">
+            <h3>Add to Favorites</h3>
+            <input type="text" id="favoriteName" placeholder="Enter name (optional)">
+            <div>
+                <button class="save-btn" onclick="saveFavorite()">Save</button>
+                <button class="cancel-btn" onclick="closeFavoriteModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Configuration Modal -->
+    <div id="saveModal" class="modal">
+        <div class="modal-content">
+            <h3>Save Configuration</h3>
+            <input type="text" id="configName" placeholder="Enter configuration name">
+            <div>
+                <button class="save-btn" onclick="saveConfiguration()">Save</button>
+                <button class="cancel-btn" onclick="closeSaveModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Configuration Modal -->
+    <div id="loadModal" class="modal">
+        <div class="modal-content" style="width: 500px;">
+            <h3>Load Configuration</h3>
+            <div id="configList" class="config-list">
+                <!-- Saved configurations will be listed here -->
+            </div>
+            <div>
+                <button class="cancel-btn" onclick="closeLoadModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="settings.js"></script>
+    <script src="timeline.js"></script>
+</body>
+</html>

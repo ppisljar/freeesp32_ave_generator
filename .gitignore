@@ -1,0 +1,13 @@
+# Development tools and scripts
+*.py
+app.js
+index_original.html
+
+# System files
+.DS_Store
+*.log
+
+# Editor files
+.vscode/
+*.swp
+*.swo

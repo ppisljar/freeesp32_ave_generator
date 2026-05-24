@@ -789,7 +789,8 @@ body {
 
         .music-file-input,
         .music-url-input,
-        .music-volume-control {
+        .music-volume-control,
+        .music-cors-option {
             display: flex;
             align-items: center;
             gap: 8px;

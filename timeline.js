@@ -846,6 +846,10 @@
                                        value="${backgroundMusicState.currentUrl}"
                                        onchange="handleMusicUrlInput(this.value)">
                             </div>
+                            <div class="music-cors-option">
+                                <input type="checkbox" id="music-cors-proxy">
+                                <label for="music-cors-proxy">Use CORS proxy (for blocked URLs)</label>
+                            </div>
                             <div class="music-volume-control">
                                 <label>Volume:</label>
                                 <input type="range" id="music-volume-slider"
@@ -858,6 +862,9 @@
                             ${backgroundMusicState.currentFile ? `📁 ${backgroundMusicState.currentFile.name}` :
                               backgroundMusicState.currentUrl ? `🔗 ${backgroundMusicState.currentUrl.split('/').pop()}` :
                               '⚪ No music selected'}
+                        </div>
+                        <div class="music-help">
+                            <small>💡 CORS-friendly sources: archive.org, freesound.org (direct links), your own server</small>
                         </div>
                     </div>
                 </div>
@@ -1020,8 +1027,21 @@
                 backgroundMusicState.currentFile = null;
 
             } catch (error) {
-                updateMusicStatus('❌ URL load failed');
-                alert('Failed to load audio from URL. Please check the URL and CORS settings.');
+                updateMusicStatus('❌ CORS blocked');
+
+                const errorMsg = `Failed to load audio from URL.
+
+Common solutions:
+• Try enabling "Use CORS proxy" option
+• Use direct links to audio files (not webpage links)
+• Use CORS-friendly services like:
+  - Internet Archive (archive.org)
+  - Freesound.org (direct download links)
+  - Your own server with CORS enabled
+
+Technical issue: ${error.message}`;
+
+                alert(errorMsg);
             }
         }
 
@@ -1877,19 +1897,64 @@
             try {
                 await initializeBackgroundMusic();
 
-                backgroundMusicState.audioElement.src = url;
+                // Try direct URL first
+                let finalUrl = url;
+
+                // If direct URL fails due to CORS, try CORS proxy
+                const useCorsProxy = document.getElementById('music-cors-proxy')?.checked;
+                if (useCorsProxy) {
+                    finalUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                    console.log('🔄 Using CORS proxy:', finalUrl);
+                }
+
+                backgroundMusicState.audioElement.src = finalUrl;
                 backgroundMusicState.currentFile = null;
-                backgroundMusicState.currentUrl = url;
+                backgroundMusicState.currentUrl = url; // Store original URL
 
                 return new Promise((resolve, reject) => {
+                    let hasResolved = false;
+
                     backgroundMusicState.audioElement.onloadeddata = () => {
-                        console.log('✅ Background music URL loaded successfully');
-                        resolve();
+                        if (!hasResolved) {
+                            hasResolved = true;
+                            console.log('✅ Background music URL loaded successfully');
+                            resolve();
+                        }
                     };
 
-                    backgroundMusicState.audioElement.onerror = (error) => {
-                        console.error('❌ Failed to load background music URL:', error);
-                        reject(error);
+                    backgroundMusicState.audioElement.onerror = async (error) => {
+                        if (!hasResolved) {
+                            hasResolved = true;
+                            console.error('❌ Failed to load background music URL:', error);
+
+                            // If direct URL failed and we haven't tried proxy yet, try proxy
+                            if (!useCorsProxy && !finalUrl.includes('corsproxy.io')) {
+                                try {
+                                    console.log('🔄 Trying CORS proxy fallback...');
+                                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                                    backgroundMusicState.audioElement.src = proxyUrl;
+
+                                    // Set up new listeners for proxy attempt
+                                    backgroundMusicState.audioElement.onloadeddata = () => {
+                                        console.log('✅ Background music loaded via CORS proxy');
+                                        resolve();
+                                    };
+
+                                    backgroundMusicState.audioElement.onerror = (proxyError) => {
+                                        console.error('❌ CORS proxy also failed:', proxyError);
+                                        reject(new Error('Both direct URL and CORS proxy failed. Try a different audio source.'));
+                                    };
+
+                                    backgroundMusicState.audioElement.load();
+                                    return;
+                                } catch (proxyError) {
+                                    reject(new Error('CORS error. Try enabling CORS proxy option or use a different audio source.'));
+                                    return;
+                                }
+                            }
+
+                            reject(new Error('Failed to load audio. CORS restrictions may apply.'));
+                        }
                     };
 
                     backgroundMusicState.audioElement.load();

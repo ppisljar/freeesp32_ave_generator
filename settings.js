@@ -29,6 +29,12 @@ let audioContext;
                 this.isochronicRate = 10; // Hz - rate of on/off pulsing (0.1-100Hz)
                 this.isDelayedTone = false; // whether delayed tone is enabled
                 this.delayTime = 100; // delay in milliseconds (1-5000ms)
+
+                // Advanced Binaural Beat Modulation (only active when locked)
+                this.verticalModulation = false; // amplitude modulation at beat frequency
+                this.horizontalModulation = false; // left-right oscillation at beat frequency
+                this.modulationDepth = 0.5; // modulation intensity (0-1)
+
                 this.animate = false; // whether to animate frequency changes between keyframes
                 this.fade = true; // whether to fade in/out
                 this.fadeDuration = 2; // fade duration in seconds
@@ -38,6 +44,13 @@ let audioContext;
                 this.panNode = null;
                 this.lfoOscillator = null; // Low Frequency Oscillator for isochronic pulsing
                 this.lfoGainNode = null; // Controls LFO amplitude
+
+                // Advanced Binaural Modulation components
+                this.verticalLFO = null; // LFO for vertical modulation
+                this.verticalGainNode = null; // Gain modulation for vertical effect
+                this.horizontalLFO = null; // LFO for horizontal modulation
+                this.leftGainNode = null; // Left channel gain for horizontal modulation
+                this.rightGainNode = null; // Right channel gain for horizontal modulation
 
                 // Delayed tone components
                 this.delayNode = null; // Delay line for right channel
@@ -97,7 +110,10 @@ let audioContext;
                     this.panNode.pan.value = this.pan;
                 }
 
-                if (this.isIsochronic) {
+                // Set up advanced binaural modulation if locked and enabled
+                if (this.isLocked && (this.verticalModulation || this.horizontalModulation)) {
+                    this.setupBinauralModulation();
+                } else if (this.isIsochronic) {
                     // Set up isochronic pulsing with LFO
                     this.lfoOscillator = audioContext.createOscillator();
                     this.lfoGainNode = audioContext.createGain();
@@ -128,11 +144,27 @@ let audioContext;
                 if (!this.isPlaying || !this.oscillator) return;
 
                 this.oscillator.stop();
+
+                // Clean up isochronic LFO
                 if (this.lfoOscillator) {
                     this.lfoOscillator.stop();
                     this.lfoOscillator = null;
                     this.lfoGainNode = null;
                 }
+
+                // Clean up binaural modulation components
+                if (this.verticalLFO) {
+                    this.verticalLFO.stop();
+                    this.verticalLFO = null;
+                    this.verticalGainNode = null;
+                }
+                if (this.horizontalLFO) {
+                    this.horizontalLFO.stop();
+                    this.horizontalLFO = null;
+                    this.leftGainNode = null;
+                    this.rightGainNode = null;
+                }
+
                 this.oscillator = null;
                 this.gainNode = null;
                 this.panNode = null;
@@ -284,6 +316,86 @@ let audioContext;
                 // Update delay time if currently playing with delayed tone
                 if (this.isPlaying && this.delayNode) {
                     this.delayNode.delayTime.value = delayMs / 1000; // Convert ms to seconds
+                }
+            }
+
+            setupBinauralModulation() {
+                // Calculate beat frequency from locked target
+                const targetGenerator = generators[this.lockTarget];
+                if (!targetGenerator) return;
+
+                const beatFrequency = Math.abs(this.frequency - targetGenerator.frequency);
+                console.log(`🧠 Setting up binaural modulation: Beat frequency ${beatFrequency}Hz`);
+
+                if (this.verticalModulation) {
+                    // Vertical modulation: amplitude modulation at beat frequency
+                    this.verticalLFO = audioContext.createOscillator();
+                    this.verticalGainNode = audioContext.createGain();
+
+                    this.verticalLFO.frequency.value = beatFrequency;
+                    this.verticalLFO.type = 'sine'; // Smooth modulation
+
+                    // Set up gain modulation with configurable depth
+                    const modulationAmount = this.volume * this.modulationDepth * 0.5;
+                    this.verticalGainNode.gain.value = modulationAmount;
+                    this.gainNode.gain.value = this.volume - modulationAmount; // DC offset
+
+                    // Connect vertical modulation
+                    this.verticalLFO.connect(this.verticalGainNode);
+                    this.verticalGainNode.connect(this.gainNode.gain);
+                    this.verticalLFO.start();
+
+                    console.log(`📊 Vertical modulation enabled at ${beatFrequency}Hz`);
+                }
+
+                if (this.horizontalModulation) {
+                    // Horizontal modulation: left-right oscillation
+                    this.horizontalLFO = audioContext.createOscillator();
+
+                    // Create separate gain nodes for left/right channels
+                    this.leftGainNode = audioContext.createGain();
+                    this.rightGainNode = audioContext.createGain();
+
+                    this.horizontalLFO.frequency.value = beatFrequency;
+                    this.horizontalLFO.type = 'sine';
+
+                    // Set up stereo separation
+                    this.channelSplitter = audioContext.createChannelSplitter(2);
+                    this.channelMerger = audioContext.createChannelMerger(2);
+
+                    // Reconnect audio chain for horizontal modulation
+                    this.gainNode.disconnect();
+                    this.gainNode.connect(this.channelSplitter);
+
+                    // Left channel (inverted LFO)
+                    const leftInverter = audioContext.createGain();
+                    leftInverter.gain.value = -this.modulationDepth;
+                    this.horizontalLFO.connect(leftInverter);
+                    leftInverter.connect(this.leftGainNode.gain);
+                    this.leftGainNode.gain.value = 0.5 + (this.modulationDepth * 0.5);
+
+                    // Right channel (normal LFO)
+                    const rightModGain = audioContext.createGain();
+                    rightModGain.gain.value = this.modulationDepth;
+                    this.horizontalLFO.connect(rightModGain);
+                    rightModGain.connect(this.rightGainNode.gain);
+                    this.rightGainNode.gain.value = 0.5 + (this.modulationDepth * 0.5);
+
+                    // Connect channels
+                    this.channelSplitter.connect(this.leftGainNode, 0);
+                    this.channelSplitter.connect(this.rightGainNode, 1);
+                    this.leftGainNode.connect(this.channelMerger, 0, 0);
+                    this.rightGainNode.connect(this.channelMerger, 0, 1);
+
+                    // Connect to final output (skip panNode for horizontal modulation)
+                    this.channelMerger.connect(audioContext.destination);
+
+                    this.horizontalLFO.start();
+
+                    console.log(`◀️▶️ Horizontal modulation enabled at ${beatFrequency}Hz`);
+                } else if (!this.verticalModulation) {
+                    // Normal gain setting if no modulation
+                    this.gainNode.gain.value = this.volume;
                 }
             }
         }
@@ -867,6 +979,36 @@ let audioContext;
                         </div>
                     </div>
 
+                    <div class="frequency-input binaural-modulation-controls" id="${panelId}-binaural-controls" style="display: none;">
+                        <label>Advanced Binaural Beats</label>
+                        <div class="binaural-modulation-section">
+                            <div class="modulation-toggles">
+                                <div class="modulation-toggle">
+                                    <input type="checkbox" id="${panelId}-vertical-mod"
+                                           onchange="updateBinauralModulation('${panelId}', 'vertical', this.checked)">
+                                    <label for="${panelId}-vertical-mod">📊 Vertical Modulation</label>
+                                </div>
+                                <div class="modulation-toggle">
+                                    <input type="checkbox" id="${panelId}-horizontal-mod"
+                                           onchange="updateBinauralModulation('${panelId}', 'horizontal', this.checked)">
+                                    <label for="${panelId}-horizontal-mod">◀️▶️ Horizontal Modulation</label>
+                                </div>
+                            </div>
+                            <div class="modulation-depth-control">
+                                <label>Depth:</label>
+                                <input type="range" class="modulation-depth-slider"
+                                       id="${panelId}-mod-depth"
+                                       min="0.1" max="1" step="0.1" value="0.5"
+                                       oninput="updateModulationDepth('${panelId}', this.value)">
+                                <span class="modulation-depth-display" id="${panelId}-mod-depth-display">50%</span>
+                            </div>
+                            <div class="binaural-info">
+                                <small>🧠 Advanced binaural effects using beat frequency modulation<br>
+                                Vertical: Amplitude pulses | Horizontal: Left-right oscillation</small>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="frequency-input">
                         <button class="play-btn" id="${panelId}-play" onclick="togglePlay('${panelId}')">Play</button>
                     </div>
@@ -1023,6 +1165,41 @@ let audioContext;
             document.getElementById(`${panelId}-delay-time-display`).textContent = delayMs + 'ms';
         }
 
+        function updateBinauralModulation(panelId, type, enabled) {
+            const generator = generators[panelId];
+            if (!generator) return;
+
+            if (type === 'vertical') {
+                generator.verticalModulation = enabled;
+            } else if (type === 'horizontal') {
+                generator.horizontalModulation = enabled;
+            }
+
+            // Restart audio if currently playing to apply changes
+            if (generator.isPlaying) {
+                generator.stop();
+                generator.start();
+            }
+
+            console.log(`🧠 ${type} modulation ${enabled ? 'enabled' : 'disabled'} for ${panelId}`);
+        }
+
+        function updateModulationDepth(panelId, depth) {
+            const generator = generators[panelId];
+            if (!generator) return;
+
+            generator.modulationDepth = parseFloat(depth);
+            document.getElementById(`${panelId}-mod-depth-display`).textContent = Math.round(depth * 100) + '%';
+
+            // Restart audio if currently playing to apply changes
+            if (generator.isPlaying) {
+                generator.stop();
+                generator.start();
+            }
+
+            console.log(`🎛️ Modulation depth set to ${Math.round(depth * 100)}% for ${panelId}`);
+        }
+
         function updateAnimate(panelId, enabled) {
             generators[panelId].animate = enabled;
 
@@ -1104,12 +1281,28 @@ let audioContext;
                 const targetLabel = getPanelLabel(generator.lockTarget);
                 indicator.textContent = `→ ${targetLabel}`;
                 indicator.classList.add('active');
+
+                // Show binaural modulation controls
+                showBinauralModulationControls(panelId, true);
             } else {
                 generator.frequencyOffset = 0;
 
                 // Hide indicator
                 const indicator = document.getElementById(`${panelId}-lock-indicator`);
                 indicator.classList.remove('active');
+
+                // Hide binaural modulation controls
+                showBinauralModulationControls(panelId, false);
+            }
+        }
+
+        function showBinauralModulationControls(panelId, show) {
+            const binauralControls = document.getElementById(`${panelId}-binaural-controls`);
+            if (binauralControls) {
+                binauralControls.style.display = show ? 'block' : 'none';
+                if (show) {
+                    console.log(`🧠 Binaural modulation controls shown for ${panelId} (locked panel)`);
+                }
             }
         }
 
@@ -1241,7 +1434,10 @@ let audioContext;
                     isIsochronic: generator.isIsochronic,
                     isochronicRate: generator.isochronicRate,
                     isDelayedTone: generator.isDelayedTone,
-                    delayTime: generator.delayTime
+                    delayTime: generator.delayTime,
+                    verticalModulation: generator.verticalModulation,
+                    horizontalModulation: generator.horizontalModulation,
+                    modulationDepth: generator.modulationDepth
                 };
             });
 
@@ -1382,6 +1578,9 @@ let audioContext;
                 generators[panelId].isochronicRate = savedPanel.isochronicRate || 10;
                 generators[panelId].isDelayedTone = savedPanel.isDelayedTone || false;
                 generators[panelId].delayTime = savedPanel.delayTime || 100;
+                generators[panelId].verticalModulation = savedPanel.verticalModulation || false;
+                generators[panelId].horizontalModulation = savedPanel.horizontalModulation || false;
+                generators[panelId].modulationDepth = savedPanel.modulationDepth || 0.5;
 
                 // Update UI elements
                 updateFrequencyDisplay(panelId, savedPanel.frequency);
@@ -1417,6 +1616,15 @@ let audioContext;
                 document.getElementById(`${panelId}-pan-display`).style.opacity = isDelayed ? '0.5' : '1';
                 document.getElementById(`${panelId}-isochronic`).disabled = isDelayed;
                 document.getElementById(`${panelId}-delay-time`).disabled = !isDelayed;
+
+                // Update binaural modulation UI state
+                document.getElementById(`${panelId}-vertical-mod`).checked = savedPanel.verticalModulation || false;
+                document.getElementById(`${panelId}-horizontal-mod`).checked = savedPanel.horizontalModulation || false;
+                document.getElementById(`${panelId}-mod-depth`).value = savedPanel.modulationDepth || 0.5;
+                document.getElementById(`${panelId}-mod-depth-display`).textContent = Math.round((savedPanel.modulationDepth || 0.5) * 100) + '%';
+
+                // Show/hide binaural controls based on lock status
+                showBinauralModulationControls(panelId, !!savedPanel.lockTarget);
 
                     // Add click handler
                     panel.addEventListener('click', () => setActivePanel(panelId));

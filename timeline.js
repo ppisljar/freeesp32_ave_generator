@@ -578,6 +578,9 @@
                     isochronicRate: generator.isochronicRate,
                     isDelayedTone: generator.isDelayedTone,
                     delayTime: generator.delayTime,
+                    verticalModulation: generator.verticalModulation,
+                    horizontalModulation: generator.horizontalModulation,
+                    modulationDepth: generator.modulationDepth,
                     animate: generator.animate,
                     fade: generator.fade,
                     fadeDuration: generator.fadeDuration
@@ -662,6 +665,9 @@
                     generator.isochronicRate = panelData.isochronicRate;
                     generator.isDelayedTone = panelData.isDelayedTone || false;
                     generator.delayTime = panelData.delayTime || 100;
+                    generator.verticalModulation = panelData.verticalModulation || false;
+                    generator.horizontalModulation = panelData.horizontalModulation || false;
+                    generator.modulationDepth = panelData.modulationDepth || 0.5;
                     generator.animate = panelData.animate || false;
                     generator.fade = panelData.fade !== undefined ? panelData.fade : true;
                     generator.fadeDuration = panelData.fadeDuration || 2;
@@ -704,6 +710,15 @@
                     document.getElementById(`${panelId}-pan-display`).style.opacity = isDelayed ? '0.5' : '1';
                     document.getElementById(`${panelId}-isochronic`).disabled = isDelayed;
                     document.getElementById(`${panelId}-delay-time`).disabled = !isDelayed;
+
+                    // Update binaural modulation UI state
+                    document.getElementById(`${panelId}-vertical-mod`).checked = panelData.verticalModulation || false;
+                    document.getElementById(`${panelId}-horizontal-mod`).checked = panelData.horizontalModulation || false;
+                    document.getElementById(`${panelId}-mod-depth`).value = panelData.modulationDepth || 0.5;
+                    document.getElementById(`${panelId}-mod-depth-display`).textContent = Math.round((panelData.modulationDepth || 0.5) * 100) + '%';
+
+                    // Show/hide binaural controls based on lock status
+                    showBinauralModulationControls(panelId, !!panelData.lockTarget);
 
                     document.getElementById(`${panelId}-animate`).checked = panelData.animate || false;
                     document.getElementById(`${panelId}-fade`).checked = panelData.fade !== undefined ? panelData.fade : true;
@@ -1054,6 +1069,13 @@ Technical issue: ${error.message}`;
             const statusElement = document.getElementById('music-status');
             if (statusElement) {
                 statusElement.textContent = status;
+            }
+        }
+
+        function showBinauralModulationControls(panelId, show) {
+            const binauralControls = document.getElementById(`${panelId}-binaural-controls`);
+            if (binauralControls) {
+                binauralControls.style.display = show ? 'block' : 'none';
             }
         }
 

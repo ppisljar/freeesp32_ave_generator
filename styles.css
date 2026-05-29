@@ -839,3 +839,83 @@ body {
             color: #666;
             font-style: italic;
         }
+
+        /* Advanced Binaural Beat Modulation Controls */
+        .binaural-modulation-controls {
+            border: 2px solid #e8f5e8;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #f0f8f0 0%, #e8f5e8 100%);
+            margin-top: 10px;
+        }
+
+        .binaural-modulation-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .modulation-toggles {
+            display: flex;
+            gap: 15px;
+        }
+
+        .modulation-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        .modulation-toggle input[type="checkbox"] {
+            accent-color: #4CAF50;
+        }
+
+        .modulation-toggle label {
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .modulation-depth-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        .modulation-depth-control label {
+            min-width: 40px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .modulation-depth-slider {
+            flex: 1;
+            accent-color: #4CAF50;
+        }
+
+        .modulation-depth-display {
+            min-width: 35px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .binaural-info {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 5px;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .binaural-info small {
+            color: #666;
+            font-style: italic;
+            line-height: 1.3;
+        }

@@ -35,6 +35,11 @@ let audioContext;
                 this.horizontalModulation = false; // left-right oscillation at beat frequency
                 this.modulationDepth = 0.5; // modulation intensity (0-1)
 
+                // Harmonic MultiLayering
+                this.harmonicLayering = 'none'; // 'none', 'octave', 'fifth', 'triad', 'harmonic', 'golden', 'fibonacci'
+                this.harmonicLayers = 5; // number of harmonic frequencies (2-50)
+                this.harmonicVolume = 0.3; // volume scaling for harmonic layers
+
                 this.animate = false; // whether to animate frequency changes between keyframes
                 this.fade = true; // whether to fade in/out
                 this.fadeDuration = 2; // fade duration in seconds
@@ -44,6 +49,11 @@ let audioContext;
                 this.panNode = null;
                 this.lfoOscillator = null; // Low Frequency Oscillator for isochronic pulsing
                 this.lfoGainNode = null; // Controls LFO amplitude
+
+                // Harmonic MultiLayering components
+                this.harmonicOscillators = []; // Array of harmonic oscillators
+                this.harmonicGainNodes = []; // Individual gain nodes for each harmonic
+                this.harmonicMixerNode = null; // Mixer for all harmonic layers
 
                 // Advanced Binaural Modulation components
                 this.verticalLFO = null; // LFO for vertical modulation
@@ -69,12 +79,18 @@ let audioContext;
 
                 initAudioContext();
 
-                this.oscillator = audioContext.createOscillator();
                 this.gainNode = audioContext.createGain();
 
-                // Configure main oscillator
-                this.oscillator.frequency.value = this.frequency;
-                this.oscillator.type = this.waveType;
+                // Set up harmonic layering or single oscillator
+                if (this.harmonicLayering !== 'none') {
+                    this.setupHarmonicLayers();
+                } else {
+                    // Single oscillator mode (traditional)
+                    this.oscillator = audioContext.createOscillator();
+                    this.oscillator.frequency.value = this.frequency;
+                    this.oscillator.type = this.waveType;
+                    this.oscillator.connect(this.gainNode);
+                }
 
                 if (this.isDelayedTone) {
                     // Delayed tone setup: Left = direct, Right = delayed
@@ -136,14 +152,29 @@ let audioContext;
                     this.gainNode.gain.value = this.volume;
                 }
 
-                this.oscillator.start();
+                // Start oscillator(s)
+                if (this.harmonicLayering !== 'none') {
+                    this.harmonicOscillators.forEach(osc => osc.start());
+                } else {
+                    this.oscillator.start();
+                }
                 this.isPlaying = true;
             }
 
             stop() {
-                if (!this.isPlaying || !this.oscillator) return;
+                if (!this.isPlaying) return;
 
-                this.oscillator.stop();
+                // Stop harmonic oscillators or single oscillator
+                if (this.harmonicOscillators.length > 0) {
+                    this.harmonicOscillators.forEach(osc => {
+                        try { osc.stop(); } catch (e) {} // Ignore if already stopped
+                    });
+                    this.harmonicOscillators = [];
+                    this.harmonicGainNodes = [];
+                    this.harmonicMixerNode = null;
+                } else if (this.oscillator) {
+                    this.oscillator.stop();
+                }
 
                 // Clean up isochronic LFO
                 if (this.lfoOscillator) {
@@ -191,15 +222,34 @@ let audioContext;
                 }
 
                 this.frequency = freq;
-                if (this.isPlaying && this.oscillator) {
-                    this.oscillator.frequency.value = freq;
+
+                if (this.isPlaying) {
+                    if (this.harmonicOscillators.length > 0) {
+                        // Update harmonic frequencies
+                        const frequencies = this.calculateHarmonicFrequencies(
+                            freq, this.harmonicLayering, this.harmonicLayers
+                        );
+                        this.harmonicOscillators.forEach((osc, index) => {
+                            if (frequencies[index]) {
+                                osc.frequency.value = frequencies[index];
+                            }
+                        });
+                    } else if (this.oscillator) {
+                        this.oscillator.frequency.value = freq;
+                    }
                 }
             }
 
             updateWaveType(type) {
                 this.waveType = type;
-                if (this.isPlaying && this.oscillator) {
-                    this.oscillator.type = type;
+                if (this.isPlaying) {
+                    if (this.harmonicOscillators.length > 0) {
+                        this.harmonicOscillators.forEach(osc => {
+                            osc.type = type;
+                        });
+                    } else if (this.oscillator) {
+                        this.oscillator.type = type;
+                    }
                 }
             }
 
@@ -317,6 +367,101 @@ let audioContext;
                 if (this.isPlaying && this.delayNode) {
                     this.delayNode.delayTime.value = delayMs / 1000; // Convert ms to seconds
                 }
+            }
+
+            calculateHarmonicFrequencies(fundamentalFreq, layering, layers) {
+                const frequencies = [fundamentalFreq]; // Always include fundamental
+
+                switch (layering) {
+                    case 'octave': // Perfect octaves: f, 2f, 4f, 8f...
+                        for (let i = 1; i < layers; i++) {
+                            frequencies.push(fundamentalFreq * Math.pow(2, i));
+                        }
+                        break;
+
+                    case 'fifth': // Perfect fifths: f, f*1.5, f*2.25, f*3.375...
+                        for (let i = 1; i < layers; i++) {
+                            frequencies.push(fundamentalFreq * Math.pow(1.5, i));
+                        }
+                        break;
+
+                    case 'triad': // Major triad cycle: 1, 1.25, 1.5, 2, 2.5, 3...
+                        const triadRatios = [1, 1.25, 1.5]; // Root, Major Third, Perfect Fifth
+                        for (let i = 1; i < layers; i++) {
+                            const octave = Math.floor((i - 1) / 3);
+                            const triadIndex = (i - 1) % 3;
+                            frequencies.push(fundamentalFreq * triadRatios[triadIndex] * Math.pow(2, octave));
+                        }
+                        break;
+
+                    case 'harmonic': // Natural harmonic series: f, 2f, 3f, 4f, 5f...
+                        for (let i = 2; i <= layers; i++) {
+                            frequencies.push(fundamentalFreq * i);
+                        }
+                        break;
+
+                    case 'golden': // Golden ratio: f, f*φ, f*φ², f*φ³...
+                        const phi = 1.6180339887; // Golden ratio
+                        for (let i = 1; i < layers; i++) {
+                            frequencies.push(fundamentalFreq * Math.pow(phi, i));
+                        }
+                        break;
+
+                    case 'fibonacci': // Fibonacci ratios: 1, 2, 3, 5, 8, 13, 21...
+                        const fib = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233];
+                        for (let i = 1; i < layers && i < fib.length; i++) {
+                            frequencies.push(fundamentalFreq * fib[i]);
+                        }
+                        break;
+
+                    default: // 'none' - only fundamental
+                        break;
+                }
+
+                // Filter out frequencies above 20kHz (human hearing limit)
+                return frequencies.filter(freq => freq <= 20000);
+            }
+
+            setupHarmonicLayers() {
+                if (this.harmonicLayering === 'none') {
+                    return; // Single oscillator mode
+                }
+
+                console.log(`🎵 Setting up ${this.harmonicLayering} harmonic layering with ${this.harmonicLayers} layers`);
+
+                const frequencies = this.calculateHarmonicFrequencies(
+                    this.frequency,
+                    this.harmonicLayering,
+                    this.harmonicLayers
+                );
+
+                console.log(`🎼 Harmonic frequencies:`, frequencies.map(f => f.toFixed(1) + 'Hz'));
+
+                // Create mixer for harmonic layers
+                this.harmonicMixerNode = audioContext.createGain();
+
+                // Create oscillators for each harmonic frequency
+                frequencies.forEach((freq, index) => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+
+                    oscillator.frequency.value = freq;
+                    oscillator.type = this.waveType;
+
+                    // Volume scaling: fundamental at full volume, harmonics at reduced volume
+                    const volume = index === 0 ? this.volume : this.volume * this.harmonicVolume;
+                    gainNode.gain.value = volume / frequencies.length; // Normalize total volume
+
+                    // Connect harmonic layer
+                    oscillator.connect(gainNode);
+                    gainNode.connect(this.harmonicMixerNode);
+
+                    this.harmonicOscillators.push(oscillator);
+                    this.harmonicGainNodes.push(gainNode);
+                });
+
+                // Connect mixer to main gain node (replace direct oscillator connection)
+                this.harmonicMixerNode.connect(this.gainNode);
             }
 
             setupBinauralModulation() {
@@ -901,6 +1046,32 @@ let audioContext;
                     </div>
 
                     <div class="frequency-input">
+                        <label>Harmonic MultiLayering</label>
+                        <div class="harmonic-controls">
+                            <div class="harmonic-type-control">
+                                <select class="wave-select" id="${panelId}-harmonic-type" onchange="updateHarmonicLayering('${panelId}', this.value)">
+                                    <option value="none">🎵 PureTone (Single Frequency)</option>
+                                    <option value="octave">🎼 Perfect Octave (2x, 4x, 8x...)</option>
+                                    <option value="fifth">🎶 Perfect Fifth (3:2 ratio)</option>
+                                    <option value="triad">🎹 Major Triad (1:1.25:1.5)</option>
+                                    <option value="harmonic">🌊 Harmonic Series (1, 2, 3, 4...)</option>
+                                    <option value="golden">✨ Golden Ratio (φ progression)</option>
+                                    <option value="fibonacci">🌀 Fibonacci (1, 2, 3, 5, 8...)</option>
+                                </select>
+                            </div>
+                            <div class="harmonic-layers-control">
+                                <label>Layers:</label>
+                                <input type="number" id="${panelId}-harmonic-layers"
+                                       min="2" max="50" value="5"
+                                       onchange="updateHarmonicLayers('${panelId}', this.value)">
+                            </div>
+                        </div>
+                        <div class="harmonic-info">
+                            <small>🎼 MultiLayering creates rich harmonic textures by adding mathematically related frequencies</small>
+                        </div>
+                    </div>
+
+                    <div class="frequency-input">
                         <label>Volume</label>
                         <div class="volume-control">
                             <input type="range" class="volume-slider"
@@ -1200,6 +1371,54 @@ let audioContext;
             console.log(`🎛️ Modulation depth set to ${Math.round(depth * 100)}% for ${panelId}`);
         }
 
+        function updateHarmonicLayering(panelId, layering) {
+            const generator = generators[panelId];
+            if (!generator) return;
+
+            generator.harmonicLayering = layering;
+
+            // Enable/disable layers input based on layering type
+            const layersInput = document.getElementById(`${panelId}-harmonic-layers`);
+            layersInput.disabled = (layering === 'none');
+
+            // Restart audio if currently playing to apply changes
+            if (generator.isPlaying) {
+                generator.stop();
+                generator.start();
+            }
+
+            const layeringNames = {
+                'none': 'PureTone',
+                'octave': 'Perfect Octave',
+                'fifth': 'Perfect Fifth',
+                'triad': 'Major Triad',
+                'harmonic': 'Harmonic Series',
+                'golden': 'Golden Ratio',
+                'fibonacci': 'Fibonacci'
+            };
+
+            console.log(`🎼 ${layeringNames[layering]} layering ${layering === 'none' ? 'disabled' : 'enabled'} for ${panelId}`);
+        }
+
+        function updateHarmonicLayers(panelId, layers) {
+            const generator = generators[panelId];
+            if (!generator) return;
+
+            layers = Math.max(2, Math.min(50, parseInt(layers)));
+            generator.harmonicLayers = layers;
+
+            // Update input value in case it was clamped
+            document.getElementById(`${panelId}-harmonic-layers`).value = layers;
+
+            // Restart audio if currently playing to apply changes
+            if (generator.isPlaying) {
+                generator.stop();
+                generator.start();
+            }
+
+            console.log(`🎵 Harmonic layers set to ${layers} for ${panelId}`);
+        }
+
         function updateAnimate(panelId, enabled) {
             generators[panelId].animate = enabled;
 
@@ -1437,7 +1656,10 @@ let audioContext;
                     delayTime: generator.delayTime,
                     verticalModulation: generator.verticalModulation,
                     horizontalModulation: generator.horizontalModulation,
-                    modulationDepth: generator.modulationDepth
+                    modulationDepth: generator.modulationDepth,
+                    harmonicLayering: generator.harmonicLayering,
+                    harmonicLayers: generator.harmonicLayers,
+                    harmonicVolume: generator.harmonicVolume
                 };
             });
 
@@ -1581,6 +1803,9 @@ let audioContext;
                 generators[panelId].verticalModulation = savedPanel.verticalModulation || false;
                 generators[panelId].horizontalModulation = savedPanel.horizontalModulation || false;
                 generators[panelId].modulationDepth = savedPanel.modulationDepth || 0.5;
+                generators[panelId].harmonicLayering = savedPanel.harmonicLayering || 'none';
+                generators[panelId].harmonicLayers = savedPanel.harmonicLayers || 5;
+                generators[panelId].harmonicVolume = savedPanel.harmonicVolume || 0.3;
 
                 // Update UI elements
                 updateFrequencyDisplay(panelId, savedPanel.frequency);
@@ -1625,6 +1850,11 @@ let audioContext;
 
                 // Show/hide binaural controls based on lock status
                 showBinauralModulationControls(panelId, !!savedPanel.lockTarget);
+
+                // Update harmonic layering UI
+                document.getElementById(`${panelId}-harmonic-type`).value = savedPanel.harmonicLayering || 'none';
+                document.getElementById(`${panelId}-harmonic-layers`).value = savedPanel.harmonicLayers || 5;
+                document.getElementById(`${panelId}-harmonic-layers`).disabled = (savedPanel.harmonicLayering === 'none');
 
                     // Add click handler
                     panel.addEventListener('click', () => setActivePanel(panelId));

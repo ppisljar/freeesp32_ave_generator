@@ -581,6 +581,9 @@
                     verticalModulation: generator.verticalModulation,
                     horizontalModulation: generator.horizontalModulation,
                     modulationDepth: generator.modulationDepth,
+                    harmonicLayering: generator.harmonicLayering,
+                    harmonicLayers: generator.harmonicLayers,
+                    harmonicVolume: generator.harmonicVolume,
                     animate: generator.animate,
                     fade: generator.fade,
                     fadeDuration: generator.fadeDuration
@@ -668,6 +671,9 @@
                     generator.verticalModulation = panelData.verticalModulation || false;
                     generator.horizontalModulation = panelData.horizontalModulation || false;
                     generator.modulationDepth = panelData.modulationDepth || 0.5;
+                    generator.harmonicLayering = panelData.harmonicLayering || 'none';
+                    generator.harmonicLayers = panelData.harmonicLayers || 5;
+                    generator.harmonicVolume = panelData.harmonicVolume || 0.3;
                     generator.animate = panelData.animate || false;
                     generator.fade = panelData.fade !== undefined ? panelData.fade : true;
                     generator.fadeDuration = panelData.fadeDuration || 2;
@@ -719,6 +725,11 @@
 
                     // Show/hide binaural controls based on lock status
                     showBinauralModulationControls(panelId, !!panelData.lockTarget);
+
+                    // Update harmonic layering UI
+                    document.getElementById(`${panelId}-harmonic-type`).value = panelData.harmonicLayering || 'none';
+                    document.getElementById(`${panelId}-harmonic-layers`).value = panelData.harmonicLayers || 5;
+                    document.getElementById(`${panelId}-harmonic-layers`).disabled = (panelData.harmonicLayering === 'none');
 
                     document.getElementById(`${panelId}-animate`).checked = panelData.animate || false;
                     document.getElementById(`${panelId}-fade`).checked = panelData.fade !== undefined ? panelData.fade : true;

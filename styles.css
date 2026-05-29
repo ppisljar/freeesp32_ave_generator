@@ -979,3 +979,111 @@ body {
             font-style: italic;
             line-height: 1.2;
         }
+
+        /* Noise Panel Styling */
+        .noise-panel {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 25%, #ffad33 50%, #c7ecee 75%, #6a9bd1 100%);
+            border: 3px solid #ff6b6b;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 10px 0;
+            position: relative;
+            box-shadow: 0 4px 8px rgba(255, 107, 107, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .noise-panel:hover {
+            box-shadow: 0 6px 12px rgba(255, 107, 107, 0.3);
+        }
+
+        .noise-panel.active {
+            border-color: #ff4757;
+        }
+
+        .add-noise-btn {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            color: white;
+            border: 2px solid #ff6b6b;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: 600;
+            margin-right: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .add-noise-btn:hover {
+            background: linear-gradient(45deg, #ff4757, #ff6348);
+            transform: translateY(-2px);
+        }
+
+        .noise-controls {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .noise-header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .noise-header label {
+            color: #2c3e50;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5);
+        }
+
+        .pulsating-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .pulsating-slider {
+            flex: 1;
+        }
+
+        .pulsating-info {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 6px;
+            border-radius: 4px;
+            border-left: 4px solid #ff6b6b;
+        }
+
+        .pulsating-info small {
+            color: #2c3e50;
+            font-style: italic;
+            line-height: 1.2;
+        }
+
+        /* Noise Modulation Controls */
+        .noise-modulation-controls {
+            background: rgba(255, 107, 107, 0.1);
+            border: 2px solid #ff6b6b;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        .noise-modulation-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .noise-modulation-info {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 6px;
+            border-radius: 4px;
+            border-left: 4px solid #ff6b6b;
+        }
+
+        .noise-modulation-info small {
+            color: #2c3e50;
+            font-style: italic;
+            line-height: 1.3;
+        }

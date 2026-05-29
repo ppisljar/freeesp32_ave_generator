@@ -545,7 +545,338 @@ let audioContext;
             }
         }
 
+        class NoiseGenerator {
+            constructor(containerId) {
+                this.containerId = containerId;
+                this.noiseType = 'white'; // 'white', 'pink', 'brown'
+                this.volume = 0.3;
+                this.pan = 0; // -1 = left, 0 = center, 1 = right
+                this.pulsatingFrequency = 0; // Hz - 0 means no pulsing
+
+                // Advanced modulation (similar to binaural beats)
+                this.verticalModulation = false; // amplitude modulation at pulsating frequency
+                this.horizontalModulation = false; // left-right oscillation at pulsating frequency
+                this.modulationDepth = 0.5; // modulation intensity (0-1)
+
+                this.animate = false; // whether to animate changes between keyframes
+                this.fade = true; // whether to fade in/out
+                this.fadeDuration = 2; // fade duration in seconds
+                this.isPlaying = false;
+
+                // Audio nodes
+                this.noiseBuffer = null;
+                this.audioBufferSource = null;
+                this.gainNode = null;
+                this.panNode = null;
+                this.lfoOscillator = null; // Low Frequency Oscillator for pulsing
+                this.lfoGainNode = null; // Controls LFO amplitude
+
+                // Advanced Modulation components
+                this.verticalLFO = null; // LFO for vertical modulation
+                this.verticalGainNode = null; // Gain modulation for vertical effect
+                this.horizontalLFO = null; // LFO for horizontal modulation
+                this.leftGainNode = null; // Left channel gain for horizontal modulation
+                this.rightGainNode = null; // Right channel gain for horizontal modulation
+                this.channelSplitter = null;
+                this.channelMerger = null;
+
+                // Generate noise buffer on creation
+                this.generateNoiseBuffer();
+            }
+
+            generateNoiseBuffer() {
+                const bufferSize = audioContext.sampleRate * 2; // 2 seconds of noise
+                this.noiseBuffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+
+                for (let channel = 0; channel < this.noiseBuffer.numberOfChannels; channel++) {
+                    const channelData = this.noiseBuffer.getChannelData(channel);
+
+                    switch (this.noiseType) {
+                        case 'white':
+                            this.generateWhiteNoise(channelData);
+                            break;
+                        case 'pink':
+                            this.generatePinkNoise(channelData);
+                            break;
+                        case 'brown':
+                            this.generateBrownNoise(channelData);
+                            break;
+                    }
+                }
+            }
+
+            generateWhiteNoise(channelData) {
+                for (let i = 0; i < channelData.length; i++) {
+                    channelData[i] = Math.random() * 2 - 1; // Random values between -1 and 1
+                }
+            }
+
+            generatePinkNoise(channelData) {
+                let b0, b1, b2, b3, b4, b5, b6;
+                b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+
+                for (let i = 0; i < channelData.length; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179;
+                    b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520;
+                    b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522;
+                    b5 = -0.7616 * b5 - white * 0.0168980;
+                    channelData[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                    channelData[i] *= 0.11; // Reduce amplitude
+                    b6 = white * 0.115926;
+                }
+            }
+
+            generateBrownNoise(channelData) {
+                let lastOut = 0.0;
+                for (let i = 0; i < channelData.length; i++) {
+                    const white = Math.random() * 2 - 1;
+                    channelData[i] = (lastOut + (0.02 * white)) / 1.02;
+                    lastOut = channelData[i];
+                    channelData[i] *= 3.5; // Brown noise is quieter, so amplify
+                    if (channelData[i] > 1) channelData[i] = 1;
+                    if (channelData[i] < -1) channelData[i] = -1;
+                }
+            }
+
+            start() {
+                if (this.isPlaying) return;
+
+                initAudioContext();
+
+                // Create audio buffer source
+                this.audioBufferSource = audioContext.createBufferSource();
+                this.audioBufferSource.buffer = this.noiseBuffer;
+                this.audioBufferSource.loop = true;
+
+                this.gainNode = audioContext.createGain();
+                this.audioBufferSource.connect(this.gainNode);
+
+                // Set up pulsating or modulation effects
+                if (this.pulsatingFrequency > 0 && (this.verticalModulation || this.horizontalModulation)) {
+                    this.setupAdvancedModulation();
+                } else if (this.pulsatingFrequency > 0) {
+                    // Simple pulsating effect
+                    this.lfoOscillator = audioContext.createOscillator();
+                    this.lfoGainNode = audioContext.createGain();
+
+                    this.lfoOscillator.frequency.value = this.pulsatingFrequency;
+                    this.lfoOscillator.type = 'square';
+
+                    // Set up LFO to modulate gain (0 to volume)
+                    this.lfoGainNode.gain.value = this.volume / 2;
+                    this.gainNode.gain.value = this.volume / 2;
+
+                    this.lfoOscillator.connect(this.lfoGainNode);
+                    this.lfoGainNode.connect(this.gainNode.gain);
+
+                    this.lfoOscillator.start();
+                } else {
+                    // Normal continuous noise
+                    this.gainNode.gain.value = this.volume;
+                }
+
+                // Set up panning
+                this.panNode = audioContext.createStereoPanner();
+                this.gainNode.connect(this.panNode);
+                this.panNode.connect(audioContext.destination);
+                this.panNode.pan.value = this.pan;
+
+                this.audioBufferSource.start();
+                this.isPlaying = true;
+            }
+
+            stop() {
+                if (!this.isPlaying) return;
+
+                if (this.audioBufferSource) {
+                    this.audioBufferSource.stop();
+                    this.audioBufferSource = null;
+                }
+
+                if (this.lfoOscillator) {
+                    this.lfoOscillator.stop();
+                    this.lfoOscillator = null;
+                    this.lfoGainNode = null;
+                }
+
+                // Clean up modulation components
+                if (this.verticalLFO) {
+                    this.verticalLFO.stop();
+                    this.verticalLFO = null;
+                    this.verticalGainNode = null;
+                }
+                if (this.horizontalLFO) {
+                    this.horizontalLFO.stop();
+                    this.horizontalLFO = null;
+                    this.leftGainNode = null;
+                    this.rightGainNode = null;
+                    this.channelSplitter = null;
+                    this.channelMerger = null;
+                }
+
+                this.gainNode = null;
+                this.panNode = null;
+                this.isPlaying = false;
+            }
+
+            updateNoiseType(type) {
+                this.noiseType = type;
+                this.generateNoiseBuffer(); // Regenerate buffer with new noise type
+
+                // Restart if currently playing
+                if (this.isPlaying) {
+                    this.stop();
+                    this.start();
+                }
+            }
+
+            updateVolume(vol) {
+                if (!isFinite(vol) || vol < 0) vol = 0;
+                if (vol > 1) vol = 1;
+
+                this.volume = vol;
+                if (this.isPlaying && this.gainNode) {
+                    if (this.pulsatingFrequency > 0 && this.lfoGainNode && !this.verticalModulation) {
+                        // For pulsating noise, update both DC offset and modulation amplitude
+                        this.gainNode.gain.value = vol / 2;
+                        this.lfoGainNode.gain.value = vol / 2;
+                    } else if (!this.verticalModulation) {
+                        this.gainNode.gain.value = vol;
+                    }
+                }
+            }
+
+            updatePan(panValue) {
+                if (!isFinite(panValue)) panValue = 0;
+                if (panValue < -1) panValue = -1;
+                if (panValue > 1) panValue = 1;
+
+                this.pan = panValue;
+                if (this.isPlaying && this.panNode) {
+                    this.panNode.pan.value = panValue;
+                }
+            }
+
+            updatePulsatingFrequency(freq) {
+                this.pulsatingFrequency = Math.max(0, freq);
+
+                // Restart if currently playing to apply changes
+                if (this.isPlaying) {
+                    this.stop();
+                    this.start();
+                }
+            }
+
+            updateModulation(type, enabled) {
+                if (type === 'vertical') {
+                    this.verticalModulation = enabled;
+                } else if (type === 'horizontal') {
+                    this.horizontalModulation = enabled;
+                }
+
+                // Restart if currently playing to apply changes
+                if (this.isPlaying) {
+                    this.stop();
+                    this.start();
+                }
+            }
+
+            updateModulationDepth(depth) {
+                this.modulationDepth = Math.max(0.1, Math.min(1, depth));
+
+                // Update LFO gains if currently playing
+                if (this.isPlaying) {
+                    if (this.verticalLFO && this.verticalGainNode) {
+                        const modulationAmount = this.volume * this.modulationDepth * 0.5;
+                        this.verticalGainNode.gain.value = modulationAmount;
+                        this.gainNode.gain.value = this.volume - modulationAmount;
+                    }
+                    if (this.horizontalLFO && this.leftGainNode && this.rightGainNode) {
+                        this.leftGainNode.gain.value = 0.5 + (this.modulationDepth * 0.5);
+                        this.rightGainNode.gain.value = 0.5 + (this.modulationDepth * 0.5);
+                    }
+                }
+            }
+
+            setupAdvancedModulation() {
+                if (this.pulsatingFrequency <= 0) return;
+
+                console.log(`🔊 Setting up noise modulation at ${this.pulsatingFrequency}Hz`);
+
+                if (this.verticalModulation) {
+                    // Vertical modulation: amplitude modulation
+                    this.verticalLFO = audioContext.createOscillator();
+                    this.verticalGainNode = audioContext.createGain();
+
+                    this.verticalLFO.frequency.value = this.pulsatingFrequency;
+                    this.verticalLFO.type = 'sine';
+
+                    const modulationAmount = this.volume * this.modulationDepth * 0.5;
+                    this.verticalGainNode.gain.value = modulationAmount;
+                    this.gainNode.gain.value = this.volume - modulationAmount;
+
+                    this.verticalLFO.connect(this.verticalGainNode);
+                    this.verticalGainNode.connect(this.gainNode.gain);
+                    this.verticalLFO.start();
+
+                    console.log(`📊 Vertical noise modulation enabled at ${this.pulsatingFrequency}Hz`);
+                }
+
+                if (this.horizontalModulation) {
+                    // Horizontal modulation: left-right oscillation
+                    this.horizontalLFO = audioContext.createOscillator();
+                    this.leftGainNode = audioContext.createGain();
+                    this.rightGainNode = audioContext.createGain();
+
+                    this.horizontalLFO.frequency.value = this.pulsatingFrequency;
+                    this.horizontalLFO.type = 'sine';
+
+                    // Set up stereo separation
+                    this.channelSplitter = audioContext.createChannelSplitter(2);
+                    this.channelMerger = audioContext.createChannelMerger(2);
+
+                    // Reconnect audio chain for horizontal modulation
+                    this.gainNode.disconnect();
+                    this.gainNode.connect(this.channelSplitter);
+
+                    // Left channel (inverted LFO)
+                    const leftInverter = audioContext.createGain();
+                    leftInverter.gain.value = -this.modulationDepth;
+                    this.horizontalLFO.connect(leftInverter);
+                    leftInverter.connect(this.leftGainNode.gain);
+                    this.leftGainNode.gain.value = 0.5 + (this.modulationDepth * 0.5);
+
+                    // Right channel (normal LFO)
+                    const rightModGain = audioContext.createGain();
+                    rightModGain.gain.value = this.modulationDepth;
+                    this.horizontalLFO.connect(rightModGain);
+                    rightModGain.connect(this.rightGainNode.gain);
+                    this.rightGainNode.gain.value = 0.5 + (this.modulationDepth * 0.5);
+
+                    // Connect channels
+                    this.channelSplitter.connect(this.leftGainNode, 0);
+                    this.channelSplitter.connect(this.rightGainNode, 1);
+                    this.leftGainNode.connect(this.channelMerger, 0, 0);
+                    this.rightGainNode.connect(this.channelMerger, 0, 1);
+
+                    // Connect to final output (skip panNode for horizontal modulation)
+                    this.channelMerger.connect(audioContext.destination);
+
+                    this.horizontalLFO.start();
+
+                    console.log(`◀️▶️ Horizontal noise modulation enabled at ${this.pulsatingFrequency}Hz`);
+                } else if (!this.verticalModulation) {
+                    // Normal gain setting if no modulation
+                    this.gainNode.gain.value = this.volume;
+                }
+            }
+        }
+
         let generators = {};
+        let noiseGenerators = {};
         let activePanelId = null;
         let savedConfigurations = JSON.parse(localStorage.getItem('frequencyConfigurations') || '[]');
 
@@ -995,6 +1326,151 @@ let audioContext;
             }
         }
 
+        let noisePanelCounter = 0;
+
+        function addNoisePanel() {
+            noisePanelCounter++;
+            const panelId = `noise-${noisePanelCounter}`;
+
+            const panel = document.createElement('div');
+            panel.className = 'noise-panel';
+            panel.id = panelId;
+            panel.innerHTML = createNoisePanelHTML(panelId);
+
+            document.getElementById('frequency-panels').appendChild(panel);
+
+            noiseGenerators[panelId] = new NoiseGenerator(panelId);
+
+            // Initialize the panel
+            updateNoiseVolumeDisplay(panelId);
+
+            // Add click handler to make panel active
+            panel.addEventListener('click', () => setActivePanel(panelId));
+        }
+
+        function createNoisePanelHTML(panelId) {
+            return `
+                <button class="remove-panel" onclick="removeNoisePanel('${panelId}')" title="Remove Noise Panel">×</button>
+
+                <div class="noise-controls">
+                    <div class="frequency-input">
+                        <div class="noise-header">
+                            <label>🔊 Noise Generator</label>
+                        </div>
+
+                        <div class="frequency-input">
+                            <label>Noise Type</label>
+                            <select class="wave-select" id="${panelId}-noise-type" onchange="updateNoiseType('${panelId}', this.value)">
+                                <option value="white">⚪ White Noise (Equal Energy)</option>
+                                <option value="pink">🌸 Pink Noise (1/f Falloff)</option>
+                                <option value="brown">🟤 Brown Noise (1/f² Falloff)</option>
+                            </select>
+                        </div>
+
+                        <div class="frequency-input">
+                            <label>Volume</label>
+                            <div class="volume-control">
+                                <input type="range" class="volume-slider"
+                                       id="${panelId}-volume"
+                                       min="0" max="1" step="0.1" value="0.3"
+                                       oninput="updateNoiseVolume('${panelId}', this.value)">
+                                <span id="${panelId}-volume-display">30%</span>
+                            </div>
+                        </div>
+
+                        <div class="frequency-input">
+                            <label>Pan</label>
+                            <div class="pan-control">
+                                <input type="range" class="pan-slider"
+                                       id="${panelId}-pan"
+                                       min="-1" max="1" step="0.1" value="0"
+                                       oninput="updateNoisePan('${panelId}', this.value)">
+                                <span id="${panelId}-pan-display">Center</span>
+                            </div>
+                            <div class="pan-labels">
+                                <span>L</span>
+                                <span>C</span>
+                                <span>R</span>
+                            </div>
+                        </div>
+
+                        <div class="frequency-input">
+                            <label>Pulsating Frequency (Hz)</label>
+                            <div class="pulsating-control">
+                                <input type="range" class="pulsating-slider"
+                                       id="${panelId}-pulsating"
+                                       min="0" max="20" step="0.1" value="0"
+                                       oninput="updateNoisePulsating('${panelId}', this.value)">
+                                <span id="${panelId}-pulsating-display">0 Hz (Off)</span>
+                            </div>
+                            <div class="pulsating-info">
+                                <small>0 Hz = Continuous noise. Higher values create rhythmic pulsing.</small>
+                            </div>
+                        </div>
+
+                        <div class="frequency-input noise-modulation-controls" id="${panelId}-modulation-controls" style="display: none;">
+                            <label>Advanced Modulation</label>
+                            <div class="noise-modulation-section">
+                                <div class="modulation-toggles">
+                                    <div class="modulation-toggle">
+                                        <input type="checkbox" id="${panelId}-vertical-mod"
+                                               onchange="updateNoiseModulation('${panelId}', 'vertical', this.checked)">
+                                        <label for="${panelId}-vertical-mod">📊 Vertical Modulation</label>
+                                    </div>
+                                    <div class="modulation-toggle">
+                                        <input type="checkbox" id="${panelId}-horizontal-mod"
+                                               onchange="updateNoiseModulation('${panelId}', 'horizontal', this.checked)">
+                                        <label for="${panelId}-horizontal-mod">◀️▶️ Horizontal Modulation</label>
+                                    </div>
+                                </div>
+                                <div class="modulation-depth-control">
+                                    <label>Depth:</label>
+                                    <input type="range" class="modulation-depth-slider"
+                                           id="${panelId}-mod-depth"
+                                           min="0.1" max="1" step="0.1" value="0.5"
+                                           oninput="updateNoiseModulationDepth('${panelId}', this.value)">
+                                    <span class="modulation-depth-display" id="${panelId}-mod-depth-display">50%</span>
+                                </div>
+                                <div class="noise-modulation-info">
+                                    <small>🔊 Advanced noise effects using pulsating frequency modulation<br>
+                                    Vertical: Amplitude pulses | Horizontal: Left-right oscillation</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="frequency-input">
+                            <button class="play-btn" id="${panelId}-play" onclick="toggleNoisePlay('${panelId}')">Play</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="animate-controls" id="${panelId}-animate-controls">
+                    <div class="animate-toggle">
+                        <input type="checkbox" class="animate-checkbox"
+                               id="${panelId}-animate"
+                               onchange="updateNoiseAnimate('${panelId}', this.checked)">
+                        <label for="${panelId}-animate">Animate</label>
+                    </div>
+
+                    <div class="fade-toggle">
+                        <input type="checkbox" class="fade-checkbox"
+                               id="${panelId}-fade" checked
+                               onchange="updateNoiseFade('${panelId}', this.checked)">
+                        <label for="${panelId}-fade">Fade</label>
+                    </div>
+
+                    <div class="fade-duration-control">
+                        <label for="${panelId}-fade-duration">Fade Duration:</label>
+                        <input type="range" class="fade-duration-slider"
+                               id="${panelId}-fade-duration"
+                               min="1" max="10" step="1" value="2"
+                               oninput="updateNoiseFadeDuration('${panelId}', this.value)">
+                        <span class="fade-duration-display" id="${panelId}-fade-duration-display">2s</span>
+                    </div>
+                </div>
+            `;
+        }
+
         function createPanelHTML(panelId) {
             return `
                 <button class="remove-panel" onclick="removePanel('${panelId}')" title="Remove Panel">×</button>
@@ -1211,6 +1687,173 @@ let audioContext;
 
                 </div>
             `;
+        }
+
+        // Noise Panel Update Functions
+        function updateNoiseType(panelId, type) {
+            const generator = noiseGenerators[panelId];
+            if (!generator) return;
+
+            generator.updateNoiseType(type);
+
+            const typeNames = {
+                'white': 'White Noise',
+                'pink': 'Pink Noise',
+                'brown': 'Brown Noise'
+            };
+
+            console.log(`🔊 ${typeNames[type]} selected for ${panelId}`);
+        }
+
+        function updateNoiseVolume(panelId, vol) {
+            const generator = noiseGenerators[panelId];
+            if (!generator) return;
+
+            vol = Math.max(0, Math.min(1, parseFloat(vol)));
+            generator.updateVolume(vol);
+            updateNoiseVolumeDisplay(panelId, vol);
+        }
+
+        function updateNoiseVolumeDisplay(panelId, vol = null) {
+            if (vol === null) {
+                vol = noiseGenerators[panelId]?.volume || 0.3;
+            }
+            document.getElementById(`${panelId}-volume-display`).textContent = Math.round(vol * 100) + '%';
+        }
+
+        function updateNoisePan(panelId, panValue) {
+            const generator = noiseGenerators[panelId];
+            if (!generator) return;
+
+            panValue = Math.max(-1, Math.min(1, parseFloat(panValue)));
+            generator.updatePan(panValue);
+
+            let panDisplayText;
+            if (panValue < -0.1) {
+                panDisplayText = `Left ${Math.round(-panValue * 100)}%`;
+            } else if (panValue > 0.1) {
+                panDisplayText = `Right ${Math.round(panValue * 100)}%`;
+            } else {
+                panDisplayText = 'Center';
+            }
+            document.getElementById(`${panelId}-pan-display`).textContent = panDisplayText;
+        }
+
+        function updateNoisePulsating(panelId, freq) {
+            const generator = noiseGenerators[panelId];
+            if (!generator) return;
+
+            freq = Math.max(0, parseFloat(freq));
+            generator.updatePulsatingFrequency(freq);
+
+            const displayText = freq === 0 ? '0 Hz (Off)' : `${freq.toFixed(1)} Hz`;
+            document.getElementById(`${panelId}-pulsating-display`).textContent = displayText;
+
+            // Show/hide modulation controls based on pulsating frequency
+            const modulationControls = document.getElementById(`${panelId}-modulation-controls`);
+            if (freq > 0) {
+                modulationControls.style.display = 'block';
+            } else {
+                modulationControls.style.display = 'none';
+                // Reset modulation checkboxes when hiding
+                document.getElementById(`${panelId}-vertical-mod`).checked = false;
+                document.getElementById(`${panelId}-horizontal-mod`).checked = false;
+                generator.verticalModulation = false;
+                generator.horizontalModulation = false;
+            }
+
+            console.log(`🔊 Pulsating frequency set to ${freq}Hz for ${panelId}`);
+        }
+
+        function updateNoiseModulation(panelId, type, enabled) {
+            const generator = noiseGenerators[panelId];
+            if (!generator) return;
+
+            generator.updateModulation(type, enabled);
+
+            const modType = type === 'vertical' ? 'Vertical' : 'Horizontal';
+            const symbol = type === 'vertical' ? '📊' : '◀️▶️';
+            console.log(`${symbol} ${modType} modulation ${enabled ? 'enabled' : 'disabled'} for ${panelId}`);
+        }
+
+        function updateNoiseModulationDepth(panelId, depth) {
+            const generator = noiseGenerators[panelId];
+            if (!generator) return;
+
+            depth = Math.max(0.1, Math.min(1, parseFloat(depth)));
+            generator.updateModulationDepth(depth);
+            document.getElementById(`${panelId}-mod-depth-display`).textContent = Math.round(depth * 100) + '%';
+
+            console.log(`🎛️ Noise modulation depth set to ${Math.round(depth * 100)}% for ${panelId}`);
+        }
+
+        function updateNoiseAnimate(panelId, enabled) {
+            const generator = noiseGenerators[panelId];
+            if (!generator) return;
+
+            generator.animate = enabled;
+
+            if (enabled) {
+                // Disable fade when animate is enabled
+                generator.fade = false;
+                document.getElementById(`${panelId}-fade`).checked = false;
+            }
+        }
+
+        function updateNoiseFade(panelId, enabled) {
+            const generator = noiseGenerators[panelId];
+            if (!generator) return;
+
+            generator.fade = enabled;
+
+            if (enabled) {
+                // Disable animate when fade is enabled
+                generator.animate = false;
+                document.getElementById(`${panelId}-animate`).checked = false;
+            }
+        }
+
+        function updateNoiseFadeDuration(panelId, duration) {
+            const generator = noiseGenerators[panelId];
+            if (!generator) return;
+
+            duration = parseFloat(duration);
+            generator.fadeDuration = duration;
+            document.getElementById(`${panelId}-fade-duration-display`).textContent = duration.toFixed(1) + 's';
+        }
+
+        function toggleNoisePlay(panelId) {
+            const generator = noiseGenerators[panelId];
+            const playButton = document.getElementById(`${panelId}-play`);
+
+            if (!generator.isPlaying) {
+                generator.start();
+                playButton.textContent = 'Stop';
+                playButton.classList.add('playing');
+            } else {
+                generator.stop();
+                playButton.textContent = 'Play';
+                playButton.classList.remove('playing');
+            }
+        }
+
+        function removeNoisePanel(panelId) {
+            // Stop the generator if playing
+            if (noiseGenerators[panelId]) {
+                noiseGenerators[panelId].stop();
+                delete noiseGenerators[panelId];
+            }
+
+            // Remove the DOM element
+            const panel = document.getElementById(panelId);
+            if (panel) {
+                panel.remove();
+            }
+
+            // Clear active panel if this was it
+            if (activePanelId === panelId) {
+                activePanelId = null;
+            }
         }
 
         function updateFrequency(panelId, freq, skipOffsetRecalc = false) {
@@ -1636,9 +2279,11 @@ let audioContext;
                 name: name,
                 timestamp: new Date().toISOString(),
                 panelCounter: panelCounter,
+                noisePanelCounter: noisePanelCounter,
                 keyframes: [...keyframes],
                 currentKeyframeIndex: currentKeyframeIndex,
-                panels: {}
+                panels: {},
+                noisePanels: {}
             };
 
             Object.keys(generators).forEach(panelId => {
@@ -1660,6 +2305,20 @@ let audioContext;
                     harmonicLayering: generator.harmonicLayering,
                     harmonicLayers: generator.harmonicLayers,
                     harmonicVolume: generator.harmonicVolume
+                };
+            });
+
+            // Save noise panels
+            Object.keys(noiseGenerators).forEach(panelId => {
+                const generator = noiseGenerators[panelId];
+                config.noisePanels[panelId] = {
+                    noiseType: generator.noiseType,
+                    volume: generator.volume,
+                    pan: generator.pan,
+                    pulsatingFrequency: generator.pulsatingFrequency,
+                    verticalModulation: generator.verticalModulation,
+                    horizontalModulation: generator.horizontalModulation,
+                    modulationDepth: generator.modulationDepth
                 };
             });
 
@@ -1721,8 +2380,21 @@ let audioContext;
                 }
             });
 
-            // Reset counter
+            // Clear existing noise panels
+            Object.keys(noiseGenerators).forEach(panelId => {
+                if (noiseGenerators[panelId]) {
+                    noiseGenerators[panelId].stop();
+                    delete noiseGenerators[panelId];
+                }
+                const panelElement = document.getElementById(panelId);
+                if (panelElement) {
+                    panelElement.remove();
+                }
+            });
+
+            // Reset counters
             panelCounter = 0;
+            noisePanelCounter = 0;
             activePanelId = null;
 
             // Restore keyframes
@@ -1879,6 +2551,39 @@ let audioContext;
                     }
                 });
 
+                // Recreate noise panels if they exist
+                const allNoisePanelIds = new Set();
+                config.keyframes.forEach(kf => {
+                    Object.keys(kf.noisePanels || {}).forEach(panelId => allNoisePanelIds.add(panelId));
+                });
+
+                Array.from(allNoisePanelIds).forEach(panelId => {
+                    // Extract panel number and update counter
+                    const panelNumber = parseInt(panelId.split('-')[1]);
+                    if (panelNumber > noisePanelCounter) {
+                        noisePanelCounter = panelNumber;
+                    }
+
+                    // Create panel
+                    const panel = document.createElement('div');
+                    panel.className = 'noise-panel';
+                    panel.id = panelId;
+                    panel.innerHTML = createNoisePanelHTML(panelId);
+
+                    document.getElementById('frequency-panels').appendChild(panel);
+
+                    // Create generator
+                    noiseGenerators[panelId] = new NoiseGenerator(panelId);
+
+                    // Add click handler
+                    panel.addEventListener('click', () => setActivePanel(panelId));
+                });
+
+                // Restore noise panel counters from config
+                if (config.noisePanelCounter !== undefined) {
+                    noisePanelCounter = config.noisePanelCounter;
+                }
+
                 // Initial keyframe will be created by timeline.js
                 // initializeKeyframes(); // Moved to timeline.js
             }
@@ -2028,6 +2733,12 @@ let audioContext;
                 }
             });
 
+            Object.keys(noiseGenerators).forEach(panelId => {
+                if (noiseGenerators[panelId].isPlaying) {
+                    toggleNoisePlay(panelId);
+                }
+            });
+
             // Exit fullscreen if active
             if (isFullscreen) {
                 exitFullscreen();
@@ -2038,6 +2749,12 @@ let audioContext;
             Object.keys(generators).forEach(panelId => {
                 if (!generators[panelId].isPlaying) {
                     togglePlay(panelId);
+                }
+            });
+
+            Object.keys(noiseGenerators).forEach(panelId => {
+                if (!noiseGenerators[panelId].isPlaying) {
+                    toggleNoisePlay(panelId);
                 }
             });
 

@@ -538,7 +538,8 @@
                     dutyCycle: currentScreenSettings.dutyCycle || 50,
                     mode: currentScreenSettings.mode || 'auto'
                 },
-                panels: {}
+                panels: {},
+                noisePanels: {}
             };
 
             Object.keys(generators).forEach(panelId => {
@@ -584,6 +585,23 @@
                     harmonicLayering: generator.harmonicLayering,
                     harmonicLayers: generator.harmonicLayers,
                     harmonicVolume: generator.harmonicVolume,
+                    animate: generator.animate,
+                    fade: generator.fade,
+                    fadeDuration: generator.fadeDuration
+                };
+            });
+
+            // Add noise panels data
+            Object.keys(noiseGenerators).forEach(panelId => {
+                const generator = noiseGenerators[panelId];
+                keyframe.noisePanels[panelId] = {
+                    noiseType: generator.noiseType,
+                    volume: generator.volume,
+                    pan: generator.pan,
+                    pulsatingFrequency: generator.pulsatingFrequency,
+                    verticalModulation: generator.verticalModulation,
+                    horizontalModulation: generator.horizontalModulation,
+                    modulationDepth: generator.modulationDepth,
                     animate: generator.animate,
                     fade: generator.fade,
                     fadeDuration: generator.fadeDuration
@@ -737,6 +755,72 @@
                     document.getElementById(`${panelId}-fade-duration-display`).textContent = (panelData.fadeDuration || 2).toFixed(1) + 's';
                 }
             });
+
+            // Load noise panels if they exist
+            if (keyframe.noisePanels) {
+                Object.keys(keyframe.noisePanels).forEach(panelId => {
+                    if (noiseGenerators[panelId]) {
+                        const panelData = keyframe.noisePanels[panelId];
+                        const generator = noiseGenerators[panelId];
+
+                        console.log(`🔊 Loading noise panel ${panelId} data:`, panelData);
+
+                        // Update generator state
+                        generator.noiseType = panelData.noiseType || 'white';
+                        generator.volume = panelData.volume || 0.3;
+                        generator.pan = panelData.pan || 0;
+                        generator.pulsatingFrequency = panelData.pulsatingFrequency || 0;
+                        generator.verticalModulation = panelData.verticalModulation || false;
+                        generator.horizontalModulation = panelData.horizontalModulation || false;
+                        generator.modulationDepth = panelData.modulationDepth || 0.5;
+                        generator.animate = panelData.animate || false;
+                        generator.fade = panelData.fade !== undefined ? panelData.fade : true;
+                        generator.fadeDuration = panelData.fadeDuration || 2;
+
+                        // Update UI elements
+                        document.getElementById(`${panelId}-noise-type`).value = panelData.noiseType || 'white';
+                        document.getElementById(`${panelId}-volume`).value = panelData.volume || 0.3;
+                        document.getElementById(`${panelId}-volume-display`).textContent = Math.round((panelData.volume || 0.3) * 100) + '%';
+                        document.getElementById(`${panelId}-pan`).value = panelData.pan || 0;
+
+                        let panDisplayText;
+                        const panValue = panelData.pan || 0;
+                        if (panValue < -0.1) {
+                            panDisplayText = `Left ${Math.round(-panValue * 100)}%`;
+                        } else if (panValue > 0.1) {
+                            panDisplayText = `Right ${Math.round(panValue * 100)}%`;
+                        } else {
+                            panDisplayText = 'Center';
+                        }
+                        document.getElementById(`${panelId}-pan-display`).textContent = panDisplayText;
+
+                        document.getElementById(`${panelId}-pulsating`).value = panelData.pulsatingFrequency || 0;
+                        const pulsatingDisplayText = (panelData.pulsatingFrequency || 0) === 0 ? '0 Hz (Off)' : `${(panelData.pulsatingFrequency || 0).toFixed(1)} Hz`;
+                        document.getElementById(`${panelId}-pulsating-display`).textContent = pulsatingDisplayText;
+
+                        // Show/hide modulation controls based on pulsating frequency
+                        const modulationControls = document.getElementById(`${panelId}-modulation-controls`);
+                        if ((panelData.pulsatingFrequency || 0) > 0) {
+                            modulationControls.style.display = 'block';
+                        } else {
+                            modulationControls.style.display = 'none';
+                        }
+
+                        document.getElementById(`${panelId}-vertical-mod`).checked = panelData.verticalModulation || false;
+                        document.getElementById(`${panelId}-horizontal-mod`).checked = panelData.horizontalModulation || false;
+                        document.getElementById(`${panelId}-mod-depth`).value = panelData.modulationDepth || 0.5;
+                        document.getElementById(`${panelId}-mod-depth-display`).textContent = Math.round((panelData.modulationDepth || 0.5) * 100) + '%';
+
+                        document.getElementById(`${panelId}-animate`).checked = panelData.animate || false;
+                        document.getElementById(`${panelId}-fade`).checked = panelData.fade !== undefined ? panelData.fade : true;
+                        document.getElementById(`${panelId}-fade-duration`).value = panelData.fadeDuration || 2;
+                        document.getElementById(`${panelId}-fade-duration-display`).textContent = (panelData.fadeDuration || 2).toFixed(1) + 's';
+
+                        // Regenerate noise buffer if type changed
+                        generator.generateNoiseBuffer();
+                    }
+                });
+            }
 
             // Update lock dropdowns
             updateLockDropdowns();
@@ -1115,7 +1199,8 @@ Technical issue: ${error.message}`;
                     length: 15,
                     guideText: "Should visibly slow down from 5Hz to 0.5Hz during these 15 seconds",
                     screenPanel: { enabled: true, color: "#FFD700", rate: 5, dutyCycle: 50, mode: 'auto' },
-                    panels: {}
+                    panels: {},
+                noisePanels: {}
                 },
                 {
                     title: "Key1 - Slow End",
@@ -1123,7 +1208,8 @@ Technical issue: ${error.message}`;
                     length: 10,
                     guideText: "Should stay at slow 0.5Hz (2 second cycle) for 10 seconds",
                     screenPanel: { enabled: true, color: "#FFD700", rate: 0.5, dutyCycle: 50, mode: 'auto' },
-                    panels: {}
+                    panels: {},
+                noisePanels: {}
                 }
             ];
             currentKeyframeIndex = 0;

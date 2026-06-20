@@ -14,6 +14,17 @@
             <button class="add-noise-btn" onclick="addNoisePanel()">Add Noise Panel</button>
             <button class="save-btn" onclick="openSaveModal()">Save Config</button>
             <button class="load-btn" onclick="openLoadModal()">Load Config</button>
+            <button class="export-btn" onclick="openExportModal()">Export Session</button>
+        </div>
+
+        <!-- Global Session Settings -->
+        <div class="session-settings">
+            <div class="session-setting">
+                <label>🎵 Background Music</label>
+                <div class="background-music-controls" id="global-background-music-controls">
+                    <!-- Background music controls will be populated by JavaScript -->
+                </div>
+            </div>
         </div>
     </div>
 
@@ -55,6 +66,20 @@
         </div>
 
         <div id="frequency-panels"></div>
+
+        <!-- Visual Flicker Panels Section -->
+        <div class="visual-panels-section">
+            <div class="visual-panels-header">
+                <h3>🔷 Visual Flicker Panels</h3>
+                <button class="add-visual-btn" onclick="addVisualPanel()">Add Visual Panel</button>
+                <div class="visual-info">
+                    <small>Create up to 4 independent visual flicker channels with frequency, duty cycle, and power control</small>
+                </div>
+            </div>
+            <div id="visual-panels" class="visual-panels-container">
+                <!-- Visual panels will be added here dynamically -->
+            </div>
+        </div>
         </div>
     </div>
 
@@ -106,6 +131,19 @@
         </div>
     </div>
 
+    <!-- Export Session Modal -->
+    <div id="exportModal" class="modal">
+        <div class="modal-content">
+            <h3>Export Session</h3>
+            <input type="text" id="exportFilename" placeholder="Enter filename" value="session.txt">
+            <div>
+                <button class="save-btn" onclick="exportTimeline()">Export</button>
+                <button class="cancel-btn" onclick="closeExportModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="visual-generator.js"></script>
     <script src="settings.js"></script>
     <script src="timeline.js"></script>
 </body>

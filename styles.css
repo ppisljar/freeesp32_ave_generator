@@ -373,7 +373,7 @@ body {
             background: #4CAF50;
         }
 
-        .save-btn, .load-btn {
+        .save-btn, .load-btn, .export-btn {
             background: #2196F3;
             color: white;
             border: none;
@@ -759,9 +759,39 @@ body {
             color: white;
         }
 
+        /* Export button in modal uses save button styling (green for actions) */
+        .modal .export-btn {
+            background: #4CAF50;
+            color: white;
+        }
+
         .modal .cancel-btn {
             background: #f44336;
             color: white;
+        }
+
+        /* Global Session Settings */
+        .session-settings {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .session-setting {
+            margin-bottom: 10px;
+        }
+
+        .session-setting:last-child {
+            margin-bottom: 0;
+        }
+
+        .session-setting label {
+            font-weight: bold;
+            color: #ffffff;
+            margin-bottom: 8px;
+            display: block;
         }
 
         /* Background Music Controls */
@@ -1086,4 +1116,405 @@ body {
             color: #2c3e50;
             font-style: italic;
             line-height: 1.3;
+        }
+
+        /* ===== KEYFRAME INHERITANCE UI STYLES ===== */
+
+        .inheritance-section {
+            background: linear-gradient(135deg, #f8f9ff 0%, #e8f4f8 100%);
+            border: 1px solid #d1e7dd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .inheritance-section label {
+            color: #0d6efd;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .inheritance-controls {
+            margin-top: 10px;
+        }
+
+        .inheritance-info {
+            margin-bottom: 15px;
+        }
+
+        .inheritance-info small {
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .panel-inheritance-group {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .panel-inheritance-group h4 {
+            margin: 0 0 10px 0;
+            color: #495057;
+            font-size: 14px;
+            border-bottom: 1px solid #f1f3f4;
+            padding-bottom: 5px;
+        }
+
+        .inheritance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 8px;
+        }
+
+        .inheritance-control {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .inheritance-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #495057;
+        }
+
+        .inheritance-checkbox input[type="checkbox"] {
+            margin: 0;
+            transform: scale(0.9);
+        }
+
+        .inheritance-checkbox input[type="checkbox"]:checked + .property-name {
+            color: #0d6efd;
+            font-weight: 500;
+        }
+
+        .property-name {
+            flex: 1;
+        }
+
+        .inherited-from {
+            color: #6c757d;
+            font-size: 11px;
+            font-style: italic;
+            margin-left: 20px;
+        }
+
+        .explicit {
+            color: #198754;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 20px;
+        }
+
+        /* Visual indicators for inherited vs explicit values in parameter controls */
+        .inherited-parameter {
+            border: 1px dashed #6c757d !important;
+            background-color: #f8f9fa !important;
+            opacity: 0.8;
+        }
+
+        .explicit-parameter {
+            border: 1px solid #ced4da !important;
+            background-color: white !important;
+        }
+
+        .recently-changed {
+            animation: parameter-highlight 2s ease-out;
+        }
+
+        @keyframes parameter-highlight {
+            0% { background-color: #fff3cd; }
+            100% { background-color: inherit; }
+        }
+
+        /* ===== VISUAL FLICKER PANELS STYLES ===== */
+
+        .visual-panels-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .visual-panels-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .visual-panels-header h3 {
+            margin: 0;
+            color: #3f51b5;
+            font-size: 18px;
+        }
+
+        .add-visual-btn {
+            background: linear-gradient(135deg, #3f51b5 0%, #5c6bc0 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .add-visual-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(63, 81, 181, 0.3);
+        }
+
+        .visual-info {
+            margin-top: 5px;
+        }
+
+        .visual-info small {
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .visual-panels-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        /* Visual Panel Styling */
+        .visual-panel {
+            background: linear-gradient(135deg, #f8f9ff 0%, #e8f4f8 100%);
+            border: 2px solid #e1e8f5;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .visual-panel:hover {
+            border-color: #3f51b5;
+            box-shadow: 0 4px 12px rgba(63, 81, 181, 0.2);
+        }
+
+        .visual-panel.active {
+            border-color: #3f51b5;
+            background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+        }
+
+        .visual-panel .remove-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff5252;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .visual-panel .remove-panel:hover {
+            background: #f44336;
+            transform: scale(1.1);
+        }
+
+        /* Visual Controls */
+        .visual-controls {
+            display: grid;
+            gap: 15px;
+        }
+
+        .visual-input {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .visual-input label {
+            font-weight: 500;
+            color: #3f51b5;
+            font-size: 14px;
+        }
+
+        .visual-input input[type="number"],
+        .visual-input select,
+        .visual-input input[type="color"] {
+            padding: 8px 12px;
+            border: 1px solid #c5cae9;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .visual-input input[type="number"]:focus,
+        .visual-input select:focus {
+            border-color: #3f51b5;
+            box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.1);
+            outline: none;
+        }
+
+        .visual-input input[type="color"] {
+            width: 60px;
+            height: 40px;
+            padding: 2px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        /* Control with display (sliders with value display) */
+        .control-with-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-with-display input[type="range"] {
+            flex: 1;
+        }
+
+        .control-with-display span {
+            min-width: 50px;
+            text-align: right;
+            font-weight: 500;
+            color: #3f51b5;
+        }
+
+        /* Slider styling for visual panels */
+        .duty-cycle-slider,
+        .power-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e1e8f5;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .duty-cycle-slider::-webkit-slider-thumb,
+        .power-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #3f51b5;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+        }
+
+        .duty-cycle-slider::-webkit-slider-thumb:hover,
+        .power-slider::-webkit-slider-thumb:hover {
+            background: #303f9f;
+            transform: scale(1.1);
+        }
+
+        /* Test controls */
+        .visual-test-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e1e8f5;
+        }
+
+        .visual-test-controls .test-btn {
+            background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .visual-test-controls .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+        }
+
+        .visual-test-controls .stop-btn {
+            background: linear-gradient(135deg, #ff5252 0%, #ff7674 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .visual-test-controls .stop-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(255, 82, 82, 0.3);
+        }
+
+        /* Frequency controls in visual panels */
+        .visual-panel .freq-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .visual-panel .freq-btn {
+            background: #e8eaf6;
+            border: 1px solid #c5cae9;
+            color: #3f51b5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .visual-panel .freq-btn:hover {
+            background: #3f51b5;
+            color: white;
+        }
+
+        /* Visual panel effects */
+        .visual-panel.flashing {
+            animation: visual-flash 0.1s ease-in-out;
+        }
+
+        @keyframes visual-flash {
+            0% { background-color: inherit; }
+            50% { background-color: rgba(255, 255, 255, 0.8); }
+            100% { background-color: inherit; }
+        }
+
+        /* Responsive design for visual panels */
+        @media (max-width: 768px) {
+            .visual-panels-container {
+                grid-template-columns: 1fr;
+            }
+
+            .visual-panels-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .visual-panel {
+                padding: 15px;
+            }
         }

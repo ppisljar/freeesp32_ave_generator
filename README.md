@@ -1,62 +1,74 @@
-# Binaural Frequency Generator
+# freeesp32_ave_generator
 
-A sophisticated web-based frequency generator for creating binaural beats, isochronic tones, and immersive audio experiences with advanced visual synchronization.
+**Web-based session editor and `.led` timeline file generator** for the
+[`freeesp32_ave`](https://github.com/ppisljar/freeesp32_ave) audio-visual
+entrainment firmware.
+
+Also fully usable on its own as an **in-browser binaural-beat / isochronic
+tone generator with synchronized visual flicker** — no firmware or hardware
+required.
+
+> **Planned**: export sessions as `.wav` audio files in addition to `.led`
+> timeline scripts, so they can be played back anywhere.
+
+**[Live demo →](https://ppisljar.github.io/binaural-frequency-generator/)**
+(repo was renamed; the old URL keeps working as a redirect)
 
 ## Features
 
-### 🎵 Audio Generation
-- **Multiple Frequency Panels**: Create complex multi-frequency soundscapes
-- **Wave Types**: Sine, square, triangle, and sawtooth waves
-- **Binaural Beats**: Lock panels to create precise frequency differences
-- **Isochronic Tones**: Pulsed audio patterns for brainwave entrainment
-- **Delayed Tones**: Stereo delay effects (left direct, right delayed 1-5000ms)
-- **Volume & Panning**: Individual control for each frequency
+### Audio generation
+- **Multiple frequency panels** — build complex multi-frequency soundscapes
+- **Wave types** — sine, square, triangle, sawtooth
+- **Binaural beats** — lock panel pairs for precise L/R frequency offsets
+- **Isochronic tones** — pulsed audio for brainwave entrainment
+- **Delayed tones** — stereo delay (left direct, right delayed 1–5000 ms)
+- **Volume & panning** — per panel
+- **Noise panels** — pink / white / brown noise with modulation
 
-### 🎬 Visual Synchronization
-- **Screen Flashing**: Synchronized visual effects with configurable colors
-- **Flashlight Mode**: Control phone's camera flash (mobile only)
-- **Duty Cycle Control**: Adjustable on/off ratio (1-99%)
-- **Smart Mode Detection**: Auto-detects best visual mode per device
+### Visual synchronization
+- **Screen flashing** — full-screen flicker at configurable rate and color
+- **Flashlight mode** — phone camera flash control (Android Chrome/Edge)
+- **Duty cycle control** — 1 – 99 % on/off ratio
+- **Auto-detected** best visual mode per device
 
-### ⏱️ Timeline System
-- **Keyframe Sequences**: Create complex audio/visual journeys
-- **Smooth Animations**: Animate frequencies, volumes, and visual effects
-- **Precise Timing**: Configurable keyframe durations
-- **Real-time Playback**: Visual progress tracking
+### Timeline system
+- **Keyframe sequences** — choreograph complex audio/visual journeys
+- **Keyframe inheritance** — child keyframes inherit parent values
+- **Smooth animations** — interpolate frequencies, volumes, visual effects
+- **Real-time playback** with visual progress
 
-### 💾 Configuration Management
-- **Save/Load**: Store custom configurations
-- **Prebuilt Sessions**: Ready-made meditation and focus sessions
-- **Favorites**: Quick access to preferred frequencies
-- **Export/Import**: Share configurations
+### Session management
+- **Save / load** custom configurations
+- **Prebuilt sessions** for meditation, focus, sleep
+- **Favorites**, export / import for sharing
+- **`.led` export** for playback on `freeesp32_ave` hardware
 
-## Usage
+## Run locally
 
-1. **Add Frequency Panels**: Click "Add Frequency Panel" to create generators
-2. **Configure Audio**: Set frequency, wave type, volume, and effects
-3. **Create Keyframes**: Build sequences with "Add Keyframe"
-4. **Set Visual Effects**: Enable screen/flashlight flashing with custom rates
-5. **Play Timeline**: Experience smooth transitions between states
+```bash
+python3 serve.py            # starts a local dev server
+# open http://localhost:8000
+```
 
-## Advanced Features
+Vanilla JavaScript + Web Audio API — no build step.
 
-- **Frequency Locking**: Create precise binaural beat relationships
-- **Animation Controls**: Smooth parameter transitions between keyframes
-- **Fade Options**: Customize fade in/out behavior
-- **Visual Modes**: Screen, flashlight, or auto-detection
-- **Mobile Optimization**: Touch-friendly interface with flashlight support
+## Browser compatibility
 
-## Browser Compatibility
+| Feature | Support |
+|---|---|
+| Audio | Any modern browser with Web Audio API |
+| Screen flashing | Universal |
+| Flashlight | Chrome/Edge on Android; limited on iOS |
+| Camera permission | Required only for flashlight mode |
 
-- **Audio**: All modern browsers with Web Audio API support
-- **Visual Effects**: Universal screen flashing support
-- **Flashlight**: Chrome/Edge on Android, limited iOS support
-- **Permissions**: Camera access required for flashlight mode
+## Related projects
 
-## Live Demo
+| Repo | Role |
+|---|---|
+| [`freeesp32_audioplayer`](https://github.com/ppisljar/freeesp32_audioplayer) | Open-hardware ESP32 board (KiCad) |
+| [`freeesp32_ave`](https://github.com/ppisljar/freeesp32_ave) | Firmware that plays the `.led` files this tool generates |
+| [`freeesp32_ave_generator`](https://github.com/ppisljar/freeesp32_ave_generator) | **This repo** — session editor / timeline generator |
 
-Visit the [GitHub Pages deployment](https://ppisljar.github.io/binaural-frequency-generator/) to try it out!
+## License
 
----
-
-*Built with vanilla JavaScript and Web Audio API for maximum compatibility and performance.*
+TBD.

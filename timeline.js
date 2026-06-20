@@ -522,24 +522,16 @@
         function createKeyframeFromCurrentState() {
             console.log(`🔍 ROOT CAUSE INVESTIGATION - createKeyframeFromCurrentState()`);
 
-            const currentScreenSettings = keyframes.length > 0 && keyframes[currentKeyframeIndex]?.screenPanel
-                ? keyframes[currentKeyframeIndex].screenPanel
-                : { enabled: false, color: '#ffffff', rate: 10, dutyCycle: 50, mode: 'auto' };
+            // Legacy screen settings migration will be handled separately
 
             const keyframe = {
                 title: '',
                 description: '',
                 length: 10,
                 guideText: '',
-                screenPanel: {
-                    enabled: currentScreenSettings.enabled,
-                    color: currentScreenSettings.color,
-                    rate: currentScreenSettings.rate,
-                    dutyCycle: currentScreenSettings.dutyCycle || 50,
-                    mode: currentScreenSettings.mode || 'auto'
-                },
                 panels: {},
-                noisePanels: {}
+                noisePanels: {},
+                visualPanels: {}
             };
 
             Object.keys(generators).forEach(panelId => {
@@ -568,7 +560,7 @@
                     console.error(`💥 GENERATOR HAS INVALID PAN: ${generator.pan} (${typeof generator.pan})`);
                 }
 
-                keyframe.panels[panelId] = {
+                const panelData = {
                     frequency: Math.round(generator.frequency * 100) / 100,
                     waveType: generator.waveType,
                     volume: generator.volume,
@@ -589,12 +581,19 @@
                     fade: generator.fade,
                     fadeDuration: generator.fadeDuration
                 };
+
+                // Add inheritance metadata
+                const previousKeyframe = currentKeyframeIndex > 0 ? keyframes[currentKeyframeIndex - 1] : null;
+                const previousPanelData = previousKeyframe?.panels?.[panelId];
+                panelData._inherited = createInheritanceMetadata(panelData, previousPanelData, false);
+
+                keyframe.panels[panelId] = panelData;
             });
 
             // Add noise panels data
             Object.keys(noiseGenerators).forEach(panelId => {
                 const generator = noiseGenerators[panelId];
-                keyframe.noisePanels[panelId] = {
+                const noisePanelData = {
                     noiseType: generator.noiseType,
                     volume: generator.volume,
                     pan: generator.pan,
@@ -606,7 +605,39 @@
                     fade: generator.fade,
                     fadeDuration: generator.fadeDuration
                 };
+
+                // Add inheritance metadata for noise panels
+                const previousKeyframe = currentKeyframeIndex > 0 ? keyframes[currentKeyframeIndex - 1] : null;
+                const previousNoisePanelData = previousKeyframe?.noisePanels?.[panelId];
+                noisePanelData._inherited = createInheritanceMetadata(noisePanelData, previousNoisePanelData, true);
+
+                keyframe.noisePanels[panelId] = noisePanelData;
             });
+
+            // Add visual panels data
+            if (typeof visualGenerators !== 'undefined') {
+                Object.keys(visualGenerators).forEach(panelId => {
+                    const generator = visualGenerators[panelId];
+                    const visualPanelData = {
+                        frequency: Math.round(generator.frequency * 100) / 100,
+                        dutyCycle: generator.dutyCycle,
+                        power: generator.power,
+                        color: generator.color,
+                        mode: generator.mode,
+                        enabled: generator.enabled,
+                        animate: generator.animate,
+                        fade: generator.fade,
+                        fadeDuration: generator.fadeDuration
+                    };
+
+                    // Add inheritance metadata for visual panels
+                    const previousKeyframe = currentKeyframeIndex > 0 ? keyframes[currentKeyframeIndex - 1] : null;
+                    const previousVisualPanelData = previousKeyframe?.visualPanels?.[panelId];
+                    visualPanelData._inherited = createInheritanceMetadata(visualPanelData, previousVisualPanelData, true);
+
+                    keyframe.visualPanels[panelId] = visualPanelData;
+                });
+            }
 
             return keyframe;
         }
@@ -654,12 +685,57 @@
             console.log(`🔍 ROOT CAUSE INVESTIGATION - loadKeyframeState()`);
             console.log(`🔎 Loading keyframe:`, keyframe);
 
+            // Migrate old screenPanel format to visualPanels if needed
+            migrateScreenPanelToVisualPanels(keyframe);
+
+            // Resolve inheritance before applying keyframe state
+            const resolvedKeyframe = resolveKeyframeInheritance(keyframe, currentKeyframeIndex);
+            console.log(`🔎 Resolved keyframe with inheritance:`, resolvedKeyframe);
+
+            // Log inheritance activity for debugging
+            if (currentKeyframeIndex > 0) {
+                console.log(`🔗 INHERITANCE TEST - Keyframe ${currentKeyframeIndex}:`);
+                let inheritanceFound = false;
+
+                if (resolvedKeyframe.panels) {
+                    Object.keys(resolvedKeyframe.panels).forEach(panelId => {
+                        const panel = resolvedKeyframe.panels[panelId];
+                        if (panel._inherited) {
+                            Object.keys(panel._inherited).forEach(property => {
+                                if (panel._inherited[property]) {
+                                    console.log(`  📊 ${panelId}.${property}: inherited = ${panel[property]}`);
+                                    inheritanceFound = true;
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (resolvedKeyframe.noisePanels) {
+                    Object.keys(resolvedKeyframe.noisePanels).forEach(panelId => {
+                        const panel = resolvedKeyframe.noisePanels[panelId];
+                        if (panel._inherited) {
+                            Object.keys(panel._inherited).forEach(property => {
+                                if (panel._inherited[property]) {
+                                    console.log(`  🔊 ${panelId}.${property}: inherited = ${panel[property]}`);
+                                    inheritanceFound = true;
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (!inheritanceFound) {
+                    console.log(`  ⚪ No inherited parameters found (all explicit or no inheritance metadata)`);
+                }
+            }
+
             // Screen panel is now per-keyframe, no need to update global elements
 
             // Update all panels
-            Object.keys(keyframe.panels).forEach(panelId => {
+            Object.keys(resolvedKeyframe.panels).forEach(panelId => {
                 if (generators[panelId]) {
-                    const panelData = keyframe.panels[panelId];
+                    const panelData = resolvedKeyframe.panels[panelId];
                     const generator = generators[panelId];
 
                     console.log(`🔎 Loading panel ${panelId} data:`, panelData);
@@ -757,10 +833,10 @@
             });
 
             // Load noise panels if they exist
-            if (keyframe.noisePanels) {
-                Object.keys(keyframe.noisePanels).forEach(panelId => {
+            if (resolvedKeyframe.noisePanels) {
+                Object.keys(resolvedKeyframe.noisePanels).forEach(panelId => {
                     if (noiseGenerators[panelId]) {
-                        const panelData = keyframe.noisePanels[panelId];
+                        const panelData = resolvedKeyframe.noisePanels[panelId];
                         const generator = noiseGenerators[panelId];
 
                         console.log(`🔊 Loading noise panel ${panelId} data:`, panelData);
@@ -822,14 +898,66 @@
                 });
             }
 
+            // Load visual panels if they exist
+            if (resolvedKeyframe.visualPanels && typeof visualGenerators !== 'undefined') {
+                Object.keys(resolvedKeyframe.visualPanels).forEach(panelId => {
+                    if (visualGenerators[panelId]) {
+                        const panelData = resolvedKeyframe.visualPanels[panelId];
+                        const generator = visualGenerators[panelId];
+
+                        console.log(`🔷 Loading visual panel ${panelId} data:`, panelData);
+
+                        // Update generator state
+                        generator.frequency = panelData.frequency || 10;
+                        generator.dutyCycle = panelData.dutyCycle || 50;
+                        generator.power = panelData.power || 100;
+                        generator.color = panelData.color || '#ffffff';
+                        generator.mode = panelData.mode || 'screen';
+                        generator.enabled = panelData.enabled !== undefined ? panelData.enabled : true;
+                        generator.animate = panelData.animate || false;
+                        generator.fade = panelData.fade !== undefined ? panelData.fade : true;
+                        generator.fadeDuration = panelData.fadeDuration || 2;
+
+                        // Update UI elements
+                        const freqInput = document.getElementById(`${panelId}-freq-input`);
+                        const freqSlider = document.getElementById(`${panelId}-freq-slider`);
+                        const dutySlider = document.getElementById(`${panelId}-duty-slider`);
+                        const dutyDisplay = document.getElementById(`${panelId}-duty-display`);
+                        const powerSlider = document.getElementById(`${panelId}-power-slider`);
+                        const powerDisplay = document.getElementById(`${panelId}-power-display`);
+                        const colorInput = document.getElementById(`${panelId}-color`);
+                        const modeSelect = document.getElementById(`${panelId}-mode`);
+                        const enabledCheckbox = document.getElementById(`${panelId}-enabled`);
+                        const animateCheckbox = document.getElementById(`${panelId}-animate`);
+                        const fadeCheckbox = document.getElementById(`${panelId}-fade`);
+                        const fadeDurationSlider = document.getElementById(`${panelId}-fade-duration`);
+                        const fadeDurationDisplay = document.getElementById(`${panelId}-fade-duration-display`);
+
+                        if (freqInput) freqInput.value = (panelData.frequency || 10).toFixed(2);
+                        if (freqSlider) freqSlider.value = panelData.frequency || 10;
+                        if (dutySlider) dutySlider.value = panelData.dutyCycle || 50;
+                        if (dutyDisplay) dutyDisplay.textContent = (panelData.dutyCycle || 50) + '%';
+                        if (powerSlider) powerSlider.value = panelData.power || 100;
+                        if (powerDisplay) powerDisplay.textContent = (panelData.power || 100) + '%';
+                        if (colorInput) colorInput.value = panelData.color || '#ffffff';
+                        if (modeSelect) modeSelect.value = panelData.mode || 'screen';
+                        if (enabledCheckbox) enabledCheckbox.checked = panelData.enabled !== undefined ? panelData.enabled : true;
+                        if (animateCheckbox) animateCheckbox.checked = panelData.animate || false;
+                        if (fadeCheckbox) fadeCheckbox.checked = panelData.fade !== undefined ? panelData.fade : true;
+                        if (fadeDurationSlider) fadeDurationSlider.value = panelData.fadeDuration || 2;
+                        if (fadeDurationDisplay) fadeDurationDisplay.textContent = (panelData.fadeDuration || 2).toFixed(1) + 's';
+                    }
+                });
+            }
+
             // Update lock dropdowns
             updateLockDropdowns();
-            Object.keys(keyframe.panels).forEach(panelId => {
-                if (generators[panelId] && keyframe.panels[panelId].lockTarget) {
+            Object.keys(resolvedKeyframe.panels).forEach(panelId => {
+                if (generators[panelId] && resolvedKeyframe.panels[panelId].lockTarget) {
                     const dropdown = document.getElementById(`${panelId}-lock-dropdown`);
                     const indicator = document.getElementById(`${panelId}-lock-indicator`);
-                    dropdown.value = keyframe.panels[panelId].lockTarget;
-                    const targetLabel = getPanelLabel(keyframe.panels[panelId].lockTarget);
+                    dropdown.value = resolvedKeyframe.panels[panelId].lockTarget;
+                    const targetLabel = getPanelLabel(resolvedKeyframe.panels[panelId].lockTarget);
                     indicator.textContent = `→ ${targetLabel}`;
                     indicator.classList.add('active');
                 }
@@ -885,100 +1013,215 @@
                     <textarea placeholder="Instructions or guidance for this phase"
                               onchange="updateKeyframeProperty('guideText', this.value)">${currentKeyframe.guideText}</textarea>
                 </div>
-                <div class="keyframe-input">
-                    <label>Visual Enabled</label>
-                    <input type="checkbox" ${currentKeyframe.screenPanel?.enabled ? 'checked' : ''}
-                           onchange="updateScreenProperty('enabled', this.checked)">
-                </div>
-                <div class="keyframe-input">
-                    <label>Visual Color</label>
-                    <input type="color" value="${currentKeyframe.screenPanel?.color || '#ffffff'}"
-                           onchange="updateScreenProperty('color', this.value)">
-                </div>
-                <div class="keyframe-input">
-                    <label>Visual Rate (Hz)</label>
-                    <input type="number" class="frequency-input-field"
-                           id="screen-rate-input"
-                           min="0.01" max="100" step="0.01" value="${(currentKeyframe.screenPanel?.rate || 10).toFixed(2)}"
-                           onchange="updateScreenRateFromInput(this.value)"
-                           onkeydown="handleScreenRateKeydown(event)">
-                    <div class="frequency-slider-container">
-                        <input type="range" class="frequency-slider"
-                               id="screen-rate-slider"
-                               min="0.01" max="100" value="${currentKeyframe.screenPanel?.rate || 10}"
-                               oninput="updateScreenRateFromSlider(this.value)">
-                    </div>
-                </div>
-                <div class="keyframe-input">
-                    <label>Duty Cycle (%)</label>
-                    <input type="number" class="frequency-input-field"
-                           id="screen-duty-input"
-                           min="1" max="99" step="1" value="${currentKeyframe.screenPanel?.dutyCycle || 50}"
-                           onchange="updateScreenDutyCycleFromInput(this.value)"
-                           onkeydown="handleScreenDutyCycleKeydown(event)">
-                    <div class="frequency-slider-container">
-                        <input type="range" class="frequency-slider"
-                               id="screen-duty-slider"
-                               min="1" max="99" value="${currentKeyframe.screenPanel?.dutyCycle || 50}"
-                               oninput="updateScreenDutyCycleFromSlider(this.value)">
-                    </div>
-                </div>
-                <div class="keyframe-input">
-                    <label>Visual Mode</label>
-                    <select class="wave-select" id="screen-mode-select"
-                            onchange="updateScreenProperty('mode', this.value)">
-                        <option value="screen" ${(currentKeyframe.screenPanel?.mode || 'auto') === 'screen' ? 'selected' : ''}>🖥️ Screen Flash</option>
-                        <option value="flashlight" ${(currentKeyframe.screenPanel?.mode || 'auto') === 'flashlight' ? 'selected' : ''}>🔦 Flashlight</option>
-                        <option value="auto" ${(currentKeyframe.screenPanel?.mode || 'auto') === 'auto' ? 'selected' : ''}>🔄 Auto (Smart)</option>
-                    </select>
-                    <div class="visual-mode-info">
-                        <small>Screen: Always works | Flashlight: Mobile only | Auto: Smart detection</small>
-                    </div>
-                </div>
-                <div class="keyframe-input">
-                    <label>Background Music</label>
-                    <div class="background-music-controls">
-                        <div class="music-toggle">
-                            <input type="checkbox" id="music-enabled"
-                                   ${backgroundMusicState.isEnabled ? 'checked' : ''}
-                                   onchange="updateBackgroundMusicEnabled(this.checked)">
-                            <label for="music-enabled">Enable</label>
+                <!-- Visual flicker controls moved to visual panels section -->
+                ${generateInheritanceUI()}
+            `;
+        }
+
+        /**
+         * Generate inheritance UI controls for the current keyframe
+         */
+        function generateInheritanceUI() {
+            if (currentKeyframeIndex === 0) {
+                return ''; // No inheritance for the first keyframe
+            }
+
+            const currentKeyframe = keyframes[currentKeyframeIndex];
+            let inheritanceHTML = `
+                <div class="keyframe-input inheritance-section">
+                    <label>🔗 Parameter Inheritance</label>
+                    <div class="inheritance-controls">
+                        <div class="inheritance-info">
+                            <small>Control which parameters inherit from previous keyframes vs. are set explicitly</small>
                         </div>
-                        <div class="music-source-controls">
-                            <div class="music-file-input">
-                                <label>Local File:</label>
-                                <input type="file" id="music-file-input" accept="audio/*"
-                                       onchange="handleMusicFileInput(this.files[0])">
+            `;
+
+            // Add frequency panel inheritance controls
+            if (currentKeyframe.panels) {
+                Object.keys(currentKeyframe.panels).forEach(panelId => {
+                    const panel = currentKeyframe.panels[panelId];
+                    if (panel._inherited) {
+                        inheritanceHTML += `
+                            <div class="panel-inheritance-group">
+                                <h4>📊 ${getPanelLabel(panelId)}</h4>
+                                <div class="inheritance-grid">
+                        `;
+
+                        // Key parameters only for UI simplicity
+                        const keyProperties = ['frequency', 'waveType', 'volume', 'pan', 'harmonicLayering'];
+                        keyProperties.forEach(property => {
+                            if (panel._inherited.hasOwnProperty(property)) {
+                                const isInherited = panel._inherited[property];
+                                const sourceInfo = isInherited ? resolveInheritedValue(currentKeyframeIndex, panelId, property, false) : null;
+
+                                inheritanceHTML += `
+                                    <div class="inheritance-control">
+                                        <label class="inheritance-checkbox">
+                                            <input type="checkbox" ${isInherited ? 'checked' : ''}
+                                                   onchange="toggleInheritance('${panelId}', '${property}', this.checked, false)">
+                                            <span class="property-name">${formatPropertyName(property)}</span>
+                                        </label>
+                                        ${isInherited ? `<small class="inherited-from">from Key${sourceInfo.sourceKeyframe}</small>` : '<small class="explicit">explicit</small>'}
+                                    </div>
+                                `;
+                            }
+                        });
+
+                        inheritanceHTML += `
+                                </div>
                             </div>
-                            <div class="music-url-input">
-                                <label>URL:</label>
-                                <input type="url" id="music-url-input" placeholder="https://example.com/music.mp3"
-                                       value="${backgroundMusicState.currentUrl}"
-                                       onchange="handleMusicUrlInput(this.value)">
+                        `;
+                    }
+                });
+            }
+
+            // Add noise panel inheritance controls
+            if (currentKeyframe.noisePanels) {
+                Object.keys(currentKeyframe.noisePanels).forEach(panelId => {
+                    const panel = currentKeyframe.noisePanels[panelId];
+                    if (panel._inherited) {
+                        inheritanceHTML += `
+                            <div class="panel-inheritance-group">
+                                <h4>🔊 ${getPanelLabel(panelId)}</h4>
+                                <div class="inheritance-grid">
+                        `;
+
+                        const keyNoiseProperties = ['noiseType', 'volume', 'pan', 'pulsatingFrequency'];
+                        keyNoiseProperties.forEach(property => {
+                            if (panel._inherited.hasOwnProperty(property)) {
+                                const isInherited = panel._inherited[property];
+                                const sourceInfo = isInherited ? resolveInheritedValue(currentKeyframeIndex, panelId, property, 'noise') : null;
+
+                                inheritanceHTML += `
+                                    <div class="inheritance-control">
+                                        <label class="inheritance-checkbox">
+                                            <input type="checkbox" ${isInherited ? 'checked' : ''}
+                                                   onchange="toggleInheritance('${panelId}', '${property}', this.checked, 'noise')">
+                                            <span class="property-name">${formatPropertyName(property)}</span>
+                                        </label>
+                                        ${isInherited ? `<small class="inherited-from">from Key${sourceInfo.sourceKeyframe}</small>` : '<small class="explicit">explicit</small>'}
+                                    </div>
+                                `;
+                            }
+                        });
+
+                        inheritanceHTML += `
+                                </div>
                             </div>
-                            <div class="music-cors-option">
-                                <input type="checkbox" id="music-cors-proxy">
-                                <label for="music-cors-proxy">Use CORS proxy (for blocked URLs)</label>
+                        `;
+                    }
+                });
+            }
+
+            // Add visual panel inheritance controls
+            if (currentKeyframe.visualPanels) {
+                Object.keys(currentKeyframe.visualPanels).forEach(panelId => {
+                    const panel = currentKeyframe.visualPanels[panelId];
+                    if (panel._inherited) {
+                        inheritanceHTML += `
+                            <div class="panel-inheritance-group">
+                                <h4>🔷 ${getPanelLabel(panelId)}</h4>
+                                <div class="inheritance-grid">
+                        `;
+
+                        const keyVisualProperties = ['frequency', 'dutyCycle', 'power', 'color', 'mode'];
+                        keyVisualProperties.forEach(property => {
+                            if (panel._inherited.hasOwnProperty(property)) {
+                                const isInherited = panel._inherited[property];
+                                const sourceInfo = isInherited ? resolveInheritedValue(currentKeyframeIndex, panelId, property, 'visual') : null;
+
+                                inheritanceHTML += `
+                                    <div class="inheritance-control">
+                                        <label class="inheritance-checkbox">
+                                            <input type="checkbox" ${isInherited ? 'checked' : ''}
+                                                   onchange="toggleInheritance('${panelId}', '${property}', this.checked, 'visual')">
+                                            <span class="property-name">${formatPropertyName(property)}</span>
+                                        </label>
+                                        ${isInherited ? `<small class="inherited-from">from Key${sourceInfo.sourceKeyframe}</small>` : '<small class="explicit">explicit</small>'}
+                                    </div>
+                                `;
+                            }
+                        });
+
+                        inheritanceHTML += `
+                                </div>
                             </div>
-                            <div class="music-volume-control">
-                                <label>Volume:</label>
-                                <input type="range" id="music-volume-slider"
-                                       min="0" max="1" step="0.1" value="${backgroundMusicState.volume}"
-                                       oninput="updateBackgroundMusicVolume(this.value)">
-                                <span id="music-volume-display">${Math.round(backgroundMusicState.volume * 100)}%</span>
-                            </div>
-                        </div>
-                        <div class="music-status" id="music-status">
-                            ${backgroundMusicState.currentFile ? `📁 ${backgroundMusicState.currentFile.name}` :
-                              backgroundMusicState.currentUrl ? `🔗 ${backgroundMusicState.currentUrl.split('/').pop()}` :
-                              '⚪ No music selected'}
-                        </div>
-                        <div class="music-help">
-                            <small>💡 CORS-friendly sources: archive.org, freesound.org (direct links), your own server</small>
-                        </div>
+                        `;
+                    }
+                });
+            }
+
+            inheritanceHTML += `
                     </div>
                 </div>
             `;
+
+            return inheritanceHTML;
+        }
+
+        /**
+         * Format property names for display
+         */
+        function formatPropertyName(property) {
+            const propertyNames = {
+                frequency: 'Frequency',
+                waveType: 'Wave Type',
+                volume: 'Volume',
+                pan: 'Pan',
+                harmonicLayering: 'Harmonics',
+                noiseType: 'Noise Type',
+                pulsatingFrequency: 'Pulsating',
+                dutyCycle: 'Duty Cycle',
+                power: 'Power',
+                color: 'Color',
+                mode: 'Mode',
+                enabled: 'Enabled'
+            };
+            return propertyNames[property] || property;
+        }
+
+        /**
+         * Toggle inheritance for a specific property
+         */
+        function toggleInheritance(panelId, property, shouldInherit, panelType) {
+            const currentKeyframe = keyframes[currentKeyframeIndex];
+            let panelCollection = 'panels';
+
+            // Determine which panel collection to use
+            if (panelType === 'noise' || panelType === true) { // Support legacy boolean parameter
+                panelCollection = 'noisePanels';
+            } else if (panelType === 'visual') {
+                panelCollection = 'visualPanels';
+            }
+
+            const panel = currentKeyframe[panelCollection][panelId];
+
+            if (!panel || !panel._inherited) {
+                console.warn(`Cannot toggle inheritance for ${panelId}.${property} - no inheritance metadata`);
+                return;
+            }
+
+            // Update inheritance metadata
+            panel._inherited[property] = shouldInherit;
+
+            // If switching to explicit, keep current value
+            // If switching to inherited, resolve the inherited value
+            if (shouldInherit) {
+                const resolved = resolveInheritedValue(currentKeyframeIndex, panelId, property, panelType);
+                panel[property] = resolved.value;
+                console.log(`🔗 ${panelId}.${property} now inherits ${resolved.value} from keyframe ${resolved.sourceKeyframe}`);
+            } else {
+                console.log(`🔒 ${panelId}.${property} is now explicit with value ${panel[property]}`);
+            }
+
+            // Apply the changes to the current state and update UI
+            loadKeyframeState(currentKeyframe);
+
+            // Save the changes
+            saveCurrentKeyframe();
+
+            // Refresh the inheritance UI
+            updateKeyframeDetails();
         }
 
         function updateKeyframeProperty(property, value) {
@@ -1948,6 +2191,52 @@ Technical issue: ${error.message}`;
         window.emergencyStopFlashlight = emergencyStopFlashlight;
 
         // Background Music Functions
+        function initializeBackgroundMusicControls() {
+            const container = document.getElementById('global-background-music-controls');
+            if (!container) return;
+
+            container.innerHTML = `
+                <div class="music-toggle">
+                    <input type="checkbox" id="music-enabled"
+                           ${backgroundMusicState.isEnabled ? 'checked' : ''}
+                           onchange="updateBackgroundMusicEnabled(this.checked)">
+                    <label for="music-enabled">Enable</label>
+                </div>
+                <div class="music-source-controls">
+                    <div class="music-file-input">
+                        <label>Local File:</label>
+                        <input type="file" id="music-file-input" accept="audio/*"
+                               onchange="handleMusicFileInput(this.files[0])">
+                    </div>
+                    <div class="music-url-input">
+                        <label>URL:</label>
+                        <input type="url" id="music-url-input" placeholder="https://example.com/music.mp3"
+                               value="${backgroundMusicState.currentUrl}"
+                               onchange="handleMusicUrlInput(this.value)">
+                    </div>
+                    <div class="music-cors-option">
+                        <input type="checkbox" id="music-cors-proxy">
+                        <label for="music-cors-proxy">Use CORS proxy (for blocked URLs)</label>
+                    </div>
+                    <div class="music-volume-control">
+                        <label>Volume:</label>
+                        <input type="range" id="music-volume-slider"
+                               min="0" max="1" step="0.1" value="${backgroundMusicState.volume}"
+                               oninput="updateBackgroundMusicVolume(this.value)">
+                        <span id="music-volume-display">${Math.round(backgroundMusicState.volume * 100)}%</span>
+                    </div>
+                </div>
+                <div class="music-status" id="music-status">
+                    ${backgroundMusicState.currentFile ? `📁 ${backgroundMusicState.currentFile.name}` :
+                      backgroundMusicState.currentUrl ? `🔗 ${backgroundMusicState.currentUrl.split('/').pop()}` :
+                      '⚪ No music selected'}
+                </div>
+                <div class="music-help">
+                    <small>💡 CORS-friendly sources: archive.org, freesound.org (direct links), your own server</small>
+                </div>
+            `;
+        }
+
         async function initializeBackgroundMusic() {
             if (!audioContext) {
                 initAudioContext();
@@ -2118,6 +2407,246 @@ Technical issue: ${error.message}`;
             }
         }
 
+        // ===== VISUAL PANELS MIGRATION =====
+
+        /**
+         * Migrate old screenPanel data to new visualPanels format
+         */
+        function migrateScreenPanelToVisualPanels(keyframe) {
+            if (keyframe.screenPanel && !keyframe.visualPanels) {
+                console.log('🔄 Migrating screenPanel to visualPanels format');
+
+                keyframe.visualPanels = {
+                    'visual-1': {
+                        frequency: keyframe.screenPanel.rate || 10,
+                        dutyCycle: keyframe.screenPanel.dutyCycle || 50,
+                        power: 100, // Default power
+                        color: keyframe.screenPanel.color || '#ffffff',
+                        mode: keyframe.screenPanel.mode || 'screen',
+                        enabled: keyframe.screenPanel.enabled || false,
+                        animate: false,
+                        fade: true,
+                        fadeDuration: 2,
+
+                        // All values are explicit for migrated data
+                        _inherited: {
+                            frequency: false,
+                            dutyCycle: false,
+                            power: false,
+                            color: false,
+                            mode: false,
+                            enabled: false,
+                            animate: false,
+                            fade: false,
+                            fadeDuration: false
+                        }
+                    }
+                };
+
+                // Remove old screenPanel
+                delete keyframe.screenPanel;
+
+                console.log('✅ Migration completed:', keyframe.visualPanels);
+            }
+        }
+
+        /**
+         * Migrate all keyframes in the array
+         */
+        function migrateAllKeyframes() {
+            if (keyframes && keyframes.length > 0) {
+                keyframes.forEach((keyframe, index) => {
+                    migrateScreenPanelToVisualPanels(keyframe);
+                });
+                console.log('🔄 All keyframes migrated to visual panels format');
+            }
+        }
+
+        // ===== KEYFRAME INHERITANCE SYSTEM =====
+
+        /**
+         * Get default value for a property
+         */
+        function getDefaultValue(property) {
+            const defaults = {
+                // Frequency panel defaults
+                frequency: 440,
+                waveType: 'sine',
+                volume: 0.5,
+                pan: 0,
+                lockTarget: null,
+                frequencyOffset: 0,
+                isIsochronic: false,
+                isochronicRate: 10,
+                isDelayedTone: false,
+                delayTime: 100,
+                verticalModulation: false,
+                horizontalModulation: false,
+                modulationDepth: 0.5,
+                harmonicLayering: 'none',
+                harmonicLayers: 5,
+                harmonicVolume: 0.3,
+                animate: false,
+                fade: true,
+                fadeDuration: 2,
+
+                // Noise panel defaults
+                noiseType: 'white',
+                pulsatingFrequency: 0,
+
+                // Visual panel defaults
+                dutyCycle: 50,
+                power: 100,
+                mode: 'screen',
+                enabled: true
+            };
+            return defaults[property];
+        }
+
+        /**
+         * Resolve inherited value by looking backward through keyframes
+         */
+        function resolveInheritedValue(keyframeIndex, panelId, property, panelType = 'frequency') {
+            let currentIndex = keyframeIndex;
+
+            while (currentIndex >= 0) {
+                const kf = keyframes[currentIndex];
+                let panel = null;
+
+                // Determine which panel collection to use
+                if (panelType === 'noise' || panelType === true) { // Support legacy boolean parameter
+                    panel = kf.noisePanels && kf.noisePanels[panelId];
+                } else if (panelType === 'visual') {
+                    panel = kf.visualPanels && kf.visualPanels[panelId];
+                } else {
+                    panel = kf.panels && kf.panels[panelId];
+                }
+
+                if (panel && (!panel._inherited || !panel._inherited[property])) {
+                    return {
+                        value: panel[property],
+                        sourceKeyframe: currentIndex,
+                        wasInherited: currentIndex !== keyframeIndex
+                    };
+                }
+                currentIndex--;
+            }
+
+            return {
+                value: getDefaultValue(property),
+                sourceKeyframe: null,
+                wasInherited: false
+            };
+        }
+
+        /**
+         * Create inheritance metadata by comparing with previous keyframe
+         */
+        function createInheritanceMetadata(panelData, previousPanelData, isNoisePanel = false) {
+            if (!previousPanelData) {
+                // First keyframe - all values are explicit
+                const metadata = {};
+                Object.keys(panelData).forEach(key => {
+                    metadata[key] = false; // false = explicit
+                });
+                return metadata;
+            }
+
+            const metadata = {};
+            const propertiesToCheck = isNoisePanel
+                ? ['noiseType', 'volume', 'pan', 'pulsatingFrequency', 'verticalModulation', 'horizontalModulation', 'modulationDepth', 'animate', 'fade', 'fadeDuration']
+                : ['frequency', 'waveType', 'volume', 'pan', 'lockTarget', 'frequencyOffset', 'isIsochronic', 'isochronicRate', 'isDelayedTone', 'delayTime', 'verticalModulation', 'horizontalModulation', 'modulationDepth', 'harmonicLayering', 'harmonicLayers', 'harmonicVolume', 'animate', 'fade', 'fadeDuration'];
+
+            propertiesToCheck.forEach(property => {
+                // Compare values (handle floating point precision)
+                const currentValue = panelData[property];
+                const previousValue = previousPanelData[property];
+
+                let isEqual = false;
+                if (typeof currentValue === 'number' && typeof previousValue === 'number') {
+                    isEqual = Math.abs(currentValue - previousValue) < 0.001;
+                } else {
+                    isEqual = currentValue === previousValue;
+                }
+
+                metadata[property] = isEqual; // true = inherited, false = explicit
+            });
+
+            return metadata;
+        }
+
+        /**
+         * Apply inheritance resolution to a keyframe before loading
+         */
+        function resolveKeyframeInheritance(keyframe, keyframeIndex) {
+            const resolvedKeyframe = JSON.parse(JSON.stringify(keyframe)); // Deep clone
+
+            // Resolve frequency panels
+            if (resolvedKeyframe.panels) {
+                Object.keys(resolvedKeyframe.panels).forEach(panelId => {
+                    const panel = resolvedKeyframe.panels[panelId];
+
+                    // Backward compatibility: if no _inherited metadata, treat all as explicit
+                    if (!panel._inherited) {
+                        console.log(`🔄 Keyframe ${keyframeIndex} panel ${panelId} has no inheritance metadata - treating as explicit`);
+                        return;
+                    }
+
+                    Object.keys(panel._inherited).forEach(property => {
+                        if (panel._inherited[property]) { // true = inherited
+                            const resolved = resolveInheritedValue(keyframeIndex, panelId, property, false);
+                            console.log(`🔗 Inheriting ${property} for panel ${panelId}: ${resolved.value} from keyframe ${resolved.sourceKeyframe}`);
+                            panel[property] = resolved.value;
+                        }
+                    });
+                });
+            }
+
+            // Resolve noise panels
+            if (resolvedKeyframe.noisePanels) {
+                Object.keys(resolvedKeyframe.noisePanels).forEach(panelId => {
+                    const panel = resolvedKeyframe.noisePanels[panelId];
+
+                    // Backward compatibility: if no _inherited metadata, treat all as explicit
+                    if (!panel._inherited) {
+                        console.log(`🔄 Keyframe ${keyframeIndex} noise panel ${panelId} has no inheritance metadata - treating as explicit`);
+                        return;
+                    }
+
+                    Object.keys(panel._inherited).forEach(property => {
+                        if (panel._inherited[property]) { // true = inherited
+                            const resolved = resolveInheritedValue(keyframeIndex, panelId, property, true);
+                            console.log(`🔗 Inheriting ${property} for noise panel ${panelId}: ${resolved.value} from keyframe ${resolved.sourceKeyframe}`);
+                            panel[property] = resolved.value;
+                        }
+                    });
+                });
+            }
+
+            // Resolve visual panels
+            if (resolvedKeyframe.visualPanels) {
+                Object.keys(resolvedKeyframe.visualPanels).forEach(panelId => {
+                    const panel = resolvedKeyframe.visualPanels[panelId];
+
+                    // Backward compatibility: if no _inherited metadata, treat all as explicit
+                    if (!panel._inherited) {
+                        console.log(`🔄 Keyframe ${keyframeIndex} visual panel ${panelId} has no inheritance metadata - treating as explicit`);
+                        return;
+                    }
+
+                    Object.keys(panel._inherited).forEach(property => {
+                        if (panel._inherited[property]) { // true = inherited
+                            const resolved = resolveInheritedValue(keyframeIndex, panelId, property, 'visual');
+                            console.log(`🔗 Inheriting ${property} for visual panel ${panelId}: ${resolved.value} from keyframe ${resolved.sourceKeyframe}`);
+                            panel[property] = resolved.value;
+                        }
+                    });
+                });
+            }
+
+            return resolvedKeyframe;
+        }
+
         // Cleanup on page unload
         window.addEventListener('beforeunload', function() {
             if (flashlightState.hasPermission) {
@@ -2130,4 +2659,7 @@ Technical issue: ${error.message}`;
         window.addEventListener('DOMContentLoaded', function() {
             // Initialize keyframe system
             initializeKeyframes();
+
+            // Initialize background music controls
+            initializeBackgroundMusicControls();
         });

@@ -6,6 +6,13 @@ let audioContext;
         let favorites = JSON.parse(localStorage.getItem('frequencies') || '[]');
         let currentFavoriteFreq = 440;
 
+        // Global variables for panel generators
+        let generators = {}; // Store frequency panel generators
+        let noiseGenerators = {}; // Store noise panel generators
+        let visualGenerators = {}; // Store visual panel generators
+        let noisePanelCounter = 0; // Counter for noise panel IDs
+        let visualPanelCounter = 0; // Counter for visual panel IDs
+
         // Initialize audio context on first user interaction
         function initAudioContext() {
             if (!audioContext) {
@@ -2280,10 +2287,22 @@ let audioContext;
                 timestamp: new Date().toISOString(),
                 panelCounter: panelCounter,
                 noisePanelCounter: noisePanelCounter,
+                visualPanelCounter: visualPanelCounter,
                 keyframes: [...keyframes],
                 currentKeyframeIndex: currentKeyframeIndex,
                 panels: {},
-                noisePanels: {}
+                noisePanels: {},
+                visualPanels: {},
+                backgroundMusic: {
+                    isEnabled: backgroundMusicState.isEnabled,
+                    volume: backgroundMusicState.volume,
+                    currentUrl: backgroundMusicState.currentUrl,
+                    currentFile: backgroundMusicState.currentFile ? {
+                        name: backgroundMusicState.currentFile.name,
+                        type: backgroundMusicState.currentFile.type,
+                        size: backgroundMusicState.currentFile.size
+                    } : null
+                }
             };
 
             Object.keys(generators).forEach(panelId => {
@@ -2319,6 +2338,22 @@ let audioContext;
                     verticalModulation: generator.verticalModulation,
                     horizontalModulation: generator.horizontalModulation,
                     modulationDepth: generator.modulationDepth
+                };
+            });
+
+            // Save visual panels
+            Object.keys(visualGenerators).forEach(panelId => {
+                const generator = visualGenerators[panelId];
+                config.visualPanels[panelId] = {
+                    frequency: generator.frequency,
+                    dutyCycle: generator.dutyCycle,
+                    power: generator.power,
+                    color: generator.color,
+                    mode: generator.mode,
+                    enabled: generator.enabled,
+                    animate: generator.animate,
+                    fade: generator.fade,
+                    fadeDuration: generator.fadeDuration
                 };
             });
 
@@ -2392,9 +2427,22 @@ let audioContext;
                 }
             });
 
+            // Clear existing visual panels
+            Object.keys(visualGenerators).forEach(panelId => {
+                if (visualGenerators[panelId]) {
+                    visualGenerators[panelId].stop();
+                    delete visualGenerators[panelId];
+                }
+                const panelElement = document.getElementById(panelId);
+                if (panelElement) {
+                    panelElement.remove();
+                }
+            });
+
             // Reset counters
             panelCounter = 0;
             noisePanelCounter = 0;
+            visualPanelCounter = 0;
             activePanelId = null;
 
             // Restore keyframes
@@ -2582,6 +2630,63 @@ let audioContext;
                 // Restore noise panel counters from config
                 if (config.noisePanelCounter !== undefined) {
                     noisePanelCounter = config.noisePanelCounter;
+                }
+
+                // Recreate visual panels if they exist
+                const allVisualPanelIds = new Set();
+                config.keyframes.forEach(kf => {
+                    Object.keys(kf.visualPanels || {}).forEach(panelId => allVisualPanelIds.add(panelId));
+                });
+
+                Array.from(allVisualPanelIds).forEach(panelId => {
+                    // Extract panel number and update counter
+                    const panelNumber = parseInt(panelId.split('-')[1]);
+                    if (panelNumber > visualPanelCounter) {
+                        visualPanelCounter = panelNumber;
+                    }
+
+                    // Create panel
+                    const panel = document.createElement('div');
+                    panel.className = 'visual-panel';
+                    panel.id = panelId;
+                    panel.innerHTML = createVisualPanelHTML(panelId);
+
+                    document.getElementById('visual-panels').appendChild(panel);
+
+                    // Create generator
+                    visualGenerators[panelId] = new VisualFlickerGenerator(panelId);
+
+                    // Apply any saved properties from config.visualPanels
+                    if (config.visualPanels && config.visualPanels[panelId]) {
+                        const savedPanel = config.visualPanels[panelId];
+                        visualGenerators[panelId].frequency = savedPanel.frequency;
+                        visualGenerators[panelId].dutyCycle = savedPanel.dutyCycle;
+                        visualGenerators[panelId].power = savedPanel.power;
+                        visualGenerators[panelId].color = savedPanel.color;
+                        visualGenerators[panelId].mode = savedPanel.mode;
+                        visualGenerators[panelId].enabled = savedPanel.enabled;
+                        visualGenerators[panelId].animate = savedPanel.animate;
+                        visualGenerators[panelId].fade = savedPanel.fade;
+                        visualGenerators[panelId].fadeDuration = savedPanel.fadeDuration;
+                    }
+                });
+
+                // Restore visual panel counter from config
+                if (config.visualPanelCounter !== undefined) {
+                    visualPanelCounter = config.visualPanelCounter;
+                }
+
+                // Restore background music settings if they exist
+                if (config.backgroundMusic && typeof backgroundMusicState !== 'undefined') {
+                    backgroundMusicState.isEnabled = config.backgroundMusic.isEnabled || false;
+                    backgroundMusicState.volume = config.backgroundMusic.volume || 0.5;
+                    backgroundMusicState.currentUrl = config.backgroundMusic.currentUrl || '';
+                    backgroundMusicState.currentFile = config.backgroundMusic.currentFile || null;
+
+                    // Update the UI controls if they exist
+                    setTimeout(() => {
+                        initializeBackgroundMusicControls();
+                    }, 100);
                 }
 
                 // Initial keyframe will be created by timeline.js
@@ -3043,7 +3148,735 @@ let audioContext;
         console.log("- startAnimationTest() - Runs the test and logs progress");
         console.log("- testAnimationSystem() - Tests individual animation functions");
 
+        // ===== KEYFRAME INHERITANCE MANAGEMENT =====
+
+        /**
+         * Make a parameter value explicit in the current keyframe (no longer inherited)
+         */
+        function makeParameterExplicit(panelId, property, panelType = 'frequency') {
+            if (typeof currentKeyframeIndex === 'undefined' || currentKeyframeIndex === 0) {
+                return; // No inheritance on first keyframe
+            }
+
+            const currentKeyframe = keyframes[currentKeyframeIndex];
+            let panelCollection = 'panels';
+
+            // Determine which panel collection to use
+            if (panelType === 'noise' || panelType === true) { // Support legacy boolean parameter
+                panelCollection = 'noisePanels';
+            } else if (panelType === 'visual') {
+                panelCollection = 'visualPanels';
+            }
+
+            const panel = currentKeyframe[panelCollection] && currentKeyframe[panelCollection][panelId];
+
+            if (!panel || !panel._inherited) {
+                console.warn(`Cannot make ${panelId}.${property} explicit - no inheritance metadata`);
+                return;
+            }
+
+            if (panel._inherited[property]) {
+                panel._inherited[property] = false; // Mark as explicit
+                console.log(`🔒 Made ${panelId}.${property} explicit with value:`, panel[property]);
+
+                // Save the change and refresh UI
+                saveCurrentKeyframe();
+                if (typeof updateKeyframeDetails === 'function') {
+                    updateKeyframeDetails();
+                }
+            }
+        }
+
+        /**
+         * Make a parameter inherit from previous keyframes
+         */
+        function makeParameterInherited(panelId, property, panelType = 'frequency') {
+            if (typeof currentKeyframeIndex === 'undefined' || currentKeyframeIndex === 0) {
+                return; // No inheritance on first keyframe
+            }
+
+            const currentKeyframe = keyframes[currentKeyframeIndex];
+            let panelCollection = 'panels';
+
+            // Determine which panel collection to use
+            if (panelType === 'noise' || panelType === true) { // Support legacy boolean parameter
+                panelCollection = 'noisePanels';
+            } else if (panelType === 'visual') {
+                panelCollection = 'visualPanels';
+            }
+
+            const panel = currentKeyframe[panelCollection] && currentKeyframe[panelCollection][panelId];
+
+            if (!panel || !panel._inherited) {
+                console.warn(`Cannot make ${panelId}.${property} inherited - no inheritance metadata`);
+                return;
+            }
+
+            if (!panel._inherited[property]) {
+                panel._inherited[property] = true; // Mark as inherited
+
+                // Resolve the inherited value
+                const resolved = resolveInheritedValue(currentKeyframeIndex, panelId, property, isNoisePanel);
+                panel[property] = resolved.value;
+
+                console.log(`🔗 Made ${panelId}.${property} inherited - resolved to:`, resolved.value, `from keyframe ${resolved.sourceKeyframe}`);
+
+                // Apply the inherited value to the current state
+                const generatorType = isNoisePanel ? 'noiseGenerators' : 'generators';
+                if (window[generatorType] && window[generatorType][panelId]) {
+                    window[generatorType][panelId][property] = resolved.value;
+                }
+
+                // Save the change and refresh UI
+                saveCurrentKeyframe();
+                if (typeof updateKeyframeDetails === 'function') {
+                    updateKeyframeDetails();
+                }
+            }
+        }
+
+        /**
+         * Handle parameter changes with inheritance awareness
+         */
+        function updateParameterWithInheritance(panelId, property, newValue, panelType = 'frequency') {
+            // Always make the parameter explicit when manually changed
+            makeParameterExplicit(panelId, property, panelType);
+
+            // Apply the new value to the current generator state
+            let generatorType = 'generators';
+            let panelCollection = 'panels';
+
+            if (panelType === 'noise' || panelType === true) { // Support legacy boolean parameter
+                generatorType = 'noiseGenerators';
+                panelCollection = 'noisePanels';
+            } else if (panelType === 'visual') {
+                generatorType = 'visualGenerators';
+                panelCollection = 'visualPanels';
+            }
+
+            if (window[generatorType] && window[generatorType][panelId]) {
+                window[generatorType][panelId][property] = newValue;
+            }
+
+            // Update the keyframe data
+            if (typeof currentKeyframeIndex !== 'undefined' && keyframes[currentKeyframeIndex]) {
+                const panel = keyframes[currentKeyframeIndex][panelCollection] && keyframes[currentKeyframeIndex][panelCollection][panelId];
+                if (panel) {
+                    panel[property] = newValue;
+                }
+            }
+        }
+
+        /**
+         * Enhanced parameter update functions with inheritance support
+         */
+        function updateFrequencyWithInheritance(panelId, freq) {
+            updateParameterWithInheritance(panelId, 'frequency', parseFloat(freq), false);
+
+            // Call the original frequency update logic
+            updateFrequency(panelId, freq);
+        }
+
+        function updateVolumeWithInheritance(panelId, volume) {
+            updateParameterWithInheritance(panelId, 'volume', parseFloat(volume), false);
+
+            // Call the original volume update logic
+            updateVolume(panelId, volume);
+        }
+
+        function updatePanWithInheritance(panelId, panValue) {
+            updateParameterWithInheritance(panelId, 'pan', parseFloat(panValue), false);
+
+            // Call the original pan update logic
+            updatePan(panelId, panValue);
+        }
+
+        function updateWaveTypeWithInheritance(panelId, waveType) {
+            updateParameterWithInheritance(panelId, 'waveType', waveType, false);
+
+            // Call the original wave type update logic
+            updateWaveType(panelId, waveType);
+        }
+
+        // Noise panel inheritance functions
+        function updateNoiseVolumeWithInheritance(panelId, volume) {
+            updateParameterWithInheritance(panelId, 'volume', parseFloat(volume), 'noise');
+
+            // Call the original noise volume update logic
+            if (typeof updateNoiseVolume === 'function') {
+                updateNoiseVolume(panelId, volume);
+            }
+        }
+
+        function updateNoisePanWithInheritance(panelId, panValue) {
+            updateParameterWithInheritance(panelId, 'pan', parseFloat(panValue), 'noise');
+
+            // Call the original noise pan update logic
+            if (typeof updateNoisePan === 'function') {
+                updateNoisePan(panelId, panValue);
+            }
+        }
+
+        // Visual panel inheritance functions
+        function updateVisualFrequencyWithInheritance(panelId, frequency) {
+            updateParameterWithInheritance(panelId, 'frequency', parseFloat(frequency), 'visual');
+            updateVisualFrequency(panelId, frequency);
+        }
+
+        function updateVisualDutyCycleWithInheritance(panelId, dutyCycle) {
+            updateParameterWithInheritance(panelId, 'dutyCycle', parseFloat(dutyCycle), 'visual');
+            updateVisualDutyCycle(panelId, dutyCycle);
+        }
+
+        function updateVisualPowerWithInheritance(panelId, power) {
+            updateParameterWithInheritance(panelId, 'power', parseFloat(power), 'visual');
+            updateVisualPower(panelId, power);
+        }
+
+        function updateVisualColorWithInheritance(panelId, color) {
+            updateParameterWithInheritance(panelId, 'color', color, 'visual');
+            updateVisualColor(panelId, color);
+        }
+
+        function updateVisualModeWithInheritance(panelId, mode) {
+            updateParameterWithInheritance(panelId, 'mode', mode, 'visual');
+            updateVisualMode(panelId, mode);
+        }
+
+        function updateVisualEnabledWithInheritance(panelId, enabled) {
+            updateParameterWithInheritance(panelId, 'enabled', enabled, 'visual');
+            updateVisualEnabled(panelId, enabled);
+        }
+
+        // Make functions globally available
+        window.makeParameterExplicit = makeParameterExplicit;
+        window.makeParameterInherited = makeParameterInherited;
+        window.updateParameterWithInheritance = updateParameterWithInheritance;
+        window.updateFrequencyWithInheritance = updateFrequencyWithInheritance;
+        window.updateVolumeWithInheritance = updateVolumeWithInheritance;
+        window.updatePanWithInheritance = updatePanWithInheritance;
+        window.updateWaveTypeWithInheritance = updateWaveTypeWithInheritance;
+        window.updateNoiseVolumeWithInheritance = updateNoiseVolumeWithInheritance;
+        window.updateNoisePanWithInheritance = updateNoisePanWithInheritance;
+        window.updateVisualFrequencyWithInheritance = updateVisualFrequencyWithInheritance;
+        window.updateVisualDutyCycleWithInheritance = updateVisualDutyCycleWithInheritance;
+        window.updateVisualPowerWithInheritance = updateVisualPowerWithInheritance;
+        window.updateVisualColorWithInheritance = updateVisualColorWithInheritance;
+        window.updateVisualModeWithInheritance = updateVisualModeWithInheritance;
+        window.updateVisualEnabledWithInheritance = updateVisualEnabledWithInheritance;
+
+        console.log("🔗 Keyframe inheritance management functions loaded");
+
+        // ===== VISUAL FLICKER PANEL MANAGEMENT =====
+
+        /**
+         * Add a new visual flicker panel
+         */
+        function addVisualPanel() {
+            // Limit to 4 visual panels maximum
+            if (Object.keys(visualGenerators).length >= 4) {
+                alert('Maximum 4 visual panels allowed');
+                return;
+            }
+
+            visualPanelCounter++;
+            const panelId = `visual-${visualPanelCounter}`;
+
+            const panel = document.createElement('div');
+            panel.className = 'visual-panel';
+            panel.id = panelId;
+            panel.innerHTML = createVisualPanelHTML(panelId);
+
+            document.getElementById('visual-panels').appendChild(panel);
+
+            // Create visual generator instance
+            visualGenerators[panelId] = new VisualFlickerGenerator(panelId);
+
+            // Add click handler to make panel active
+            panel.addEventListener('click', () => setActivePanel(panelId));
+
+            console.log(`🔷 Added visual panel: ${panelId}`);
+        }
+
+        /**
+         * Remove a visual panel
+         */
+        function removeVisualPanel(panelId) {
+            if (visualGenerators[panelId]) {
+                // Stop visual effects
+                visualGenerators[panelId].stop();
+
+                // Remove from DOM
+                const panel = document.getElementById(panelId);
+                if (panel) {
+                    panel.remove();
+                }
+
+                // Clean up generator
+                delete visualGenerators[panelId];
+
+                console.log(`🔷 Removed visual panel: ${panelId}`);
+            }
+        }
+
+        /**
+         * Create HTML for a visual panel
+         */
+        function createVisualPanelHTML(panelId) {
+            return `
+                <button class="remove-panel" onclick="removeVisualPanel('${panelId}')" title="Remove Visual Panel">×</button>
+
+                <div class="visual-controls">
+                    <div class="visual-input">
+                        <label>Frequency (Hz)</label>
+                        <input type="number" class="frequency-input-field"
+                               id="${panelId}-freq-input"
+                               min="0.01" max="100" step="0.01" value="10"
+                               onchange="updateVisualFrequencyWithInheritance('${panelId}', this.value)"
+                               onkeydown="handleVisualFrequencyKeydown(event, '${panelId}')">
+                        <div class="frequency-slider-container">
+                            <input type="range" class="frequency-slider"
+                                   id="${panelId}-freq-slider"
+                                   min="0.01" max="100" value="10"
+                                   oninput="updateVisualFrequencyWithInheritance('${panelId}', this.value)">
+                        </div>
+                        <div class="freq-buttons">
+                            <button class="freq-btn" onclick="adjustVisualFrequency('${panelId}', -1)">-1</button>
+                            <button class="freq-btn" onclick="adjustVisualFrequency('${panelId}', -0.1)">-0.1</button>
+                            <button class="freq-btn" onclick="adjustVisualFrequency('${panelId}', 0.1)">+0.1</button>
+                            <button class="freq-btn" onclick="adjustVisualFrequency('${panelId}', 1)">+1</button>
+                            <button class="freq-btn" onclick="multiplyVisualFrequency('${panelId}', 0.5)">/2</button>
+                            <button class="freq-btn" onclick="multiplyVisualFrequency('${panelId}', 2)">×2</button>
+                        </div>
+                    </div>
+
+                    <div class="visual-input">
+                        <label>Duty Cycle (%)</label>
+                        <div class="control-with-display">
+                            <input type="range" class="duty-cycle-slider"
+                                   id="${panelId}-duty-slider"
+                                   min="1" max="99" value="50"
+                                   oninput="updateVisualDutyCycleWithInheritance('${panelId}', this.value)">
+                            <span id="${panelId}-duty-display">50%</span>
+                        </div>
+                    </div>
+
+                    <div class="visual-input">
+                        <label>Power/Intensity (%)</label>
+                        <div class="control-with-display">
+                            <input type="range" class="power-slider"
+                                   id="${panelId}-power-slider"
+                                   min="1" max="100" value="100"
+                                   oninput="updateVisualPowerWithInheritance('${panelId}', this.value)">
+                            <span id="${panelId}-power-display">100%</span>
+                        </div>
+                    </div>
+
+                    <div class="visual-input">
+                        <label>Color</label>
+                        <input type="color" id="${panelId}-color" value="#ffffff"
+                               onchange="updateVisualColorWithInheritance('${panelId}', this.value)">
+                    </div>
+
+                    <div class="visual-input">
+                        <label>Mode</label>
+                        <select class="wave-select" id="${panelId}-mode" onchange="updateVisualModeWithInheritance('${panelId}', this.value)">
+                            <option value="screen">🖥️ Screen Flash</option>
+                            <option value="flashlight">🔦 Flashlight</option>
+                            <option value="auto">🔄 Auto (Smart)</option>
+                        </select>
+                    </div>
+
+                    <div class="visual-input">
+                        <label>
+                            <input type="checkbox" id="${panelId}-enabled" checked
+                                   onchange="updateVisualEnabledWithInheritance('${panelId}', this.checked)">
+                            Enabled
+                        </label>
+                    </div>
+
+                    <!-- Animation controls (similar to frequency panels) -->
+                    <div class="visual-input">
+                        <label>
+                            <input type="checkbox" id="${panelId}-animate" onchange="updateVisualAnimate('${panelId}', this.checked)">
+                            Animate
+                        </label>
+                    </div>
+
+                    <div class="visual-input">
+                        <label>
+                            <input type="checkbox" id="${panelId}-fade" checked onchange="updateVisualFade('${panelId}', this.checked)">
+                            Fade
+                        </label>
+                    </div>
+
+                    <div class="visual-input">
+                        <label>Fade Duration (s)</label>
+                        <div class="control-with-display">
+                            <input type="range" id="${panelId}-fade-duration"
+                                   min="0.1" max="10" step="0.1" value="2"
+                                   oninput="updateVisualFadeDuration('${panelId}', this.value)">
+                            <span id="${panelId}-fade-duration-display">2.0s</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Test button for this panel -->
+                <div class="visual-test-controls">
+                    <button class="test-btn" onclick="testVisualPanel('${panelId}')">Test Panel</button>
+                    <button class="stop-btn" onclick="stopVisualPanel('${panelId}')">Stop</button>
+                </div>
+            `;
+        }
+
+        /**
+         * Visual panel parameter update functions
+         */
+        function updateVisualFrequency(panelId, frequency) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].updateFrequency(frequency);
+                updateVisualFrequencyDisplay(panelId, frequency);
+            }
+        }
+
+        function updateVisualFrequencyFromInput(panelId, inputValue) {
+            let freq = parseFloat(inputValue);
+            if (isNaN(freq)) freq = 10;
+            freq = Math.max(0.01, Math.min(100, freq));
+            freq = Math.round(freq * 100) / 100;
+
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].updateFrequency(freq);
+                document.getElementById(`${panelId}-freq-slider`).value = freq;
+                updateVisualFrequencyDisplay(panelId, freq);
+            }
+        }
+
+        function updateVisualFrequencyDisplay(panelId, freq = null) {
+            if (!visualGenerators[panelId]) return;
+
+            if (freq === null) {
+                freq = visualGenerators[panelId].frequency;
+            }
+            const formattedFreq = freq % 1 === 0 ? freq.toString() : freq.toFixed(2);
+            document.getElementById(`${panelId}-freq-input`).value = formattedFreq;
+        }
+
+        function adjustVisualFrequency(panelId, delta) {
+            if (!visualGenerators[panelId]) return;
+
+            const currentFreq = visualGenerators[panelId].frequency;
+            const newFreq = Math.max(0.01, Math.min(100, currentFreq + delta));
+            updateVisualFrequency(panelId, newFreq);
+            document.getElementById(`${panelId}-freq-slider`).value = newFreq;
+        }
+
+        function multiplyVisualFrequency(panelId, multiplier) {
+            if (!visualGenerators[panelId]) return;
+
+            const currentFreq = visualGenerators[panelId].frequency;
+            const newFreq = Math.max(0.01, Math.min(100, currentFreq * multiplier));
+            updateVisualFrequency(panelId, newFreq);
+            document.getElementById(`${panelId}-freq-slider`).value = newFreq;
+        }
+
+        function updateVisualDutyCycle(panelId, dutyCycle) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].updateDutyCycle(dutyCycle);
+                document.getElementById(`${panelId}-duty-display`).textContent = dutyCycle + '%';
+            }
+        }
+
+        function updateVisualPower(panelId, power) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].updatePower(power);
+                document.getElementById(`${panelId}-power-display`).textContent = power + '%';
+            }
+        }
+
+        function updateVisualColor(panelId, color) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].updateColor(color);
+            }
+        }
+
+        function updateVisualMode(panelId, mode) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].updateMode(mode);
+            }
+        }
+
+        function updateVisualEnabled(panelId, enabled) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].enabled = enabled;
+                if (!enabled && visualGenerators[panelId].isActive) {
+                    visualGenerators[panelId].stop();
+                }
+            }
+        }
+
+        function updateVisualAnimate(panelId, animate) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].animate = animate;
+            }
+        }
+
+        function updateVisualFade(panelId, fade) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].fade = fade;
+            }
+        }
+
+        function updateVisualFadeDuration(panelId, duration) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].fadeDuration = parseFloat(duration);
+                document.getElementById(`${panelId}-fade-duration-display`).textContent = parseFloat(duration).toFixed(1) + 's';
+            }
+        }
+
+        /**
+         * Test and control functions
+         */
+        function testVisualPanel(panelId) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].start();
+                setTimeout(() => {
+                    if (visualGenerators[panelId]) {
+                        visualGenerators[panelId].stop();
+                    }
+                }, 5000); // Test for 5 seconds
+            }
+        }
+
+        function stopVisualPanel(panelId) {
+            if (visualGenerators[panelId]) {
+                visualGenerators[panelId].stop();
+            }
+        }
+
+        function stopAllVisualPanels() {
+            Object.keys(visualGenerators).forEach(panelId => {
+                visualGenerators[panelId].stop();
+            });
+        }
+
+        // Keyboard handling
+        function handleVisualFrequencyKeydown(event, panelId) {
+            if (event.key === 'Enter') {
+                updateVisualFrequencyFromInput(panelId, event.target.value);
+            }
+        }
+
+        // Make functions globally available
+        window.visualGenerators = visualGenerators;
+        window.addVisualPanel = addVisualPanel;
+        window.removeVisualPanel = removeVisualPanel;
+        window.updateVisualFrequency = updateVisualFrequency;
+        window.updateVisualFrequencyFromInput = updateVisualFrequencyFromInput;
+        window.adjustVisualFrequency = adjustVisualFrequency;
+        window.multiplyVisualFrequency = multiplyVisualFrequency;
+        window.updateVisualDutyCycle = updateVisualDutyCycle;
+        window.updateVisualPower = updateVisualPower;
+        window.updateVisualColor = updateVisualColor;
+        window.updateVisualMode = updateVisualMode;
+        window.updateVisualEnabled = updateVisualEnabled;
+        window.updateVisualAnimate = updateVisualAnimate;
+        window.updateVisualFade = updateVisualFade;
+        window.updateVisualFadeDuration = updateVisualFadeDuration;
+        window.testVisualPanel = testVisualPanel;
+        window.stopVisualPanel = stopVisualPanel;
+        window.stopAllVisualPanels = stopAllVisualPanels;
+        window.handleVisualFrequencyKeydown = handleVisualFrequencyKeydown;
+
+        console.log("🔷 Visual flicker panel management functions loaded");
+
+        // ===== EXPORT SESSION FUNCTIONALITY =====
+
+        /**
+         * Data conversion utilities for export
+         */
+        function convertPan(panValue) {
+            return Math.round(panValue * 127); // -1 to 1 → -127 to 127
+        }
+
+        function convertVolume(volume) {
+            return Math.round(volume * 100); // 0-1 → 0-100
+        }
+
+        function isAnimated(currentPanel, nextPanel, panelType) {
+            if (!currentPanel || !nextPanel) return false;
+
+            const fields = panelType === 'audio'
+                ? ['frequency', 'pan', 'volume']
+                : ['frequency', 'dutyCycle', 'power'];
+
+            return fields.some(field => {
+                const current = currentPanel[field] || 0;
+                const next = nextPanel[field] || 0;
+                return Math.abs(current - next) > 0.001;
+            });
+        }
+
+        /**
+         * Main export function - triggered by UI button
+         */
+        function exportTimeline() {
+            // Ensure current state is captured
+            if (typeof saveCurrentKeyframe === 'function') {
+                saveCurrentKeyframe();
+            }
+
+            const exportData = generateTimelineExport();
+            const filename = document.getElementById('exportFilename').value.trim() || 'session.txt';
+
+            if (exportData.trim() === '') {
+                alert('No session data to export. Please create some keyframes first.');
+                return;
+            }
+
+            downloadTextFile(exportData, filename);
+            closeExportModal();
+        }
+
+        /**
+         * Timeline conversion algorithm
+         */
+        function generateTimelineExport() {
+            if (typeof keyframes === 'undefined' || !keyframes || keyframes.length === 0) {
+                console.warn('No keyframes available for export');
+                return '';
+            }
+
+            const exportLines = [];
+            let cumulativeTime = 0;
+
+            for (let i = 0; i < keyframes.length; i++) {
+                const currentKeyframe = keyframes[i];
+                const previousKeyframe = i > 0 ? keyframes[i - 1] : null;
+                let channelCounter = 1;
+
+                // Process audio panels
+                if (currentKeyframe.panels) {
+                    Object.keys(currentKeyframe.panels).forEach(panelId => {
+                        const panel = currentKeyframe.panels[panelId];
+                        const previousPanel = previousKeyframe?.panels?.[panelId];
+
+                        // Check if we should animate TO this keyframe (previous keyframe had animate=true)
+                        const shouldAnimate = previousPanel?.animate &&
+                                              previousPanel &&
+                                              isAnimated(previousPanel, panel, 'audio');
+
+                        // Format values with > prefix if animating TO this keyframe
+                        const freq = shouldAnimate ? `>${panel.frequency || 440}` : (panel.frequency || 440);
+                        const pan = shouldAnimate ? `>${convertPan(panel.pan || 0)}` : convertPan(panel.pan || 0);
+                        const volume = shouldAnimate ? `>${convertVolume(panel.volume || 0.5)}` : convertVolume(panel.volume || 0.5);
+                        const isoFreq = panel.isIsochronic ? (panel.isochronicRate || 0) : 0;
+
+                        exportLines.push(`A ${cumulativeTime} ${freq} ${pan} ${volume} ${isoFreq} ${channelCounter}`);
+                        channelCounter++;
+                    });
+                }
+
+                // Process visual panels
+                if (currentKeyframe.visualPanels) {
+                    Object.keys(currentKeyframe.visualPanels).forEach(panelId => {
+                        const panel = currentKeyframe.visualPanels[panelId];
+                        const previousPanel = previousKeyframe?.visualPanels?.[panelId];
+
+                        // Check if we should animate TO this keyframe (previous keyframe had animate=true)
+                        const shouldAnimate = previousPanel?.animate &&
+                                              previousPanel &&
+                                              isAnimated(previousPanel, panel, 'visual');
+
+                        // Format values with > prefix if animating TO this keyframe
+                        const freq = shouldAnimate ? `>${panel.frequency || 10}` : (panel.frequency || 10);
+                        const duty = shouldAnimate ? `>${panel.dutyCycle || 50}` : (panel.dutyCycle || 50);
+                        const power = shouldAnimate ? `>${panel.power || 100}` : (panel.power || 100);
+
+                        exportLines.push(`${cumulativeTime} ${freq} ${duty} ${power} ${channelCounter}`);
+                        channelCounter++;
+                    });
+                }
+
+                // Process noise panels (treat as audio with special handling)
+                if (currentKeyframe.noisePanels) {
+                    Object.keys(currentKeyframe.noisePanels).forEach(panelId => {
+                        const panel = currentKeyframe.noisePanels[panelId];
+                        const previousPanel = previousKeyframe?.noisePanels?.[panelId];
+
+                        // Check if we should animate TO this keyframe (previous keyframe had animate=true)
+                        const shouldAnimate = previousPanel?.animate &&
+                                              previousPanel &&
+                                              isAnimated(previousPanel, panel, 'audio');
+
+                        // Noise panels use volume and pan, but frequency is pulsatingFrequency
+                        const freq = shouldAnimate ? `>${panel.pulsatingFrequency || 0}` : (panel.pulsatingFrequency || 0);
+                        const pan = shouldAnimate ? `>${convertPan(panel.pan || 0)}` : convertPan(panel.pan || 0);
+                        const volume = shouldAnimate ? `>${convertVolume(panel.volume || 0.3)}` : convertVolume(panel.volume || 0.3);
+
+                        // Noise panels use A prefix and 0 for isochronic
+                        exportLines.push(`A ${cumulativeTime} ${freq} ${pan} ${volume} 0 ${channelCounter}`);
+                        channelCounter++;
+                    });
+                }
+
+                cumulativeTime += (currentKeyframe.length || 10) * 1000; // Convert seconds to milliseconds
+            }
+
+            return exportLines.join('\n');
+        }
+
+        /**
+         * File download implementation
+         */
+        function downloadTextFile(content, filename) {
+            try {
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                console.log(`📄 Session exported to: ${filename}`);
+            } catch (error) {
+                console.error('Export failed:', error);
+                alert('Export failed. Please try again.');
+            }
+        }
+
+        /**
+         * Modal control functions
+         */
+        function openExportModal() {
+            const modal = document.getElementById('exportModal');
+            if (modal) {
+                modal.style.display = 'block';
+            }
+        }
+
+        function closeExportModal() {
+            const modal = document.getElementById('exportModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Make export functions globally available
+        window.exportTimeline = exportTimeline;
+        window.openExportModal = openExportModal;
+        window.closeExportModal = closeExportModal;
+        window.generateTimelineExport = generateTimelineExport;
+        window.convertPan = convertPan;
+        window.convertVolume = convertVolume;
+
+        console.log("📤 Export session functionality loaded");
+
         // Handle page reload/close
         window.addEventListener('beforeunload', () => {
             stopAll();
+            stopAllVisualPanels();
         });

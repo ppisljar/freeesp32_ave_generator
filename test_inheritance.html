@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inheritance System Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .test-pass { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .test-fail { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .test-info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Keyframe Inheritance System Test</h1>
+    <div id="test-results"></div>
+    <button onclick="runTests()">Run Tests</button>
+    <button onclick="clearResults()">Clear Results</button>
+
+    <!-- Load the main application scripts -->
+    <script src="app.js"></script>
+    <script src="settings.js"></script>
+    <script src="timeline.js"></script>
+
+    <script>
+        let testResults = [];
+
+        function addTestResult(name, passed, message, data = null) {
+            const result = { name, passed, message, data, timestamp: new Date() };
+            testResults.push(result);
+
+            const div = document.createElement('div');
+            div.className = `test-result test-${passed ? 'pass' : 'fail'}`;
+            div.innerHTML = `
+                <strong>${passed ? '✅' : '❌'} ${name}</strong><br>
+                ${message}
+                ${data ? `<pre>${JSON.stringify(data, null, 2)}</pre>` : ''}
+            `;
+            document.getElementById('test-results').appendChild(div);
+        }
+
+        function addTestInfo(message) {
+            const div = document.createElement('div');
+            div.className = 'test-result test-info';
+            div.innerHTML = `<strong>ℹ️ Info:</strong> ${message}`;
+            document.getElementById('test-results').appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('test-results').innerHTML = '';
+            testResults = [];
+        }
+
+        async function runTests() {
+            clearResults();
+            addTestInfo('Starting Keyframe Inheritance System Tests...');
+
+            try {
+                // Test 1: Check if inheritance utility functions exist
+                addTestResult(
+                    'Utility Functions Exist',
+                    typeof getDefaultValue === 'function' && typeof resolveInheritedValue === 'function',
+                    'Checking if inheritance utility functions are loaded'
+                );
+
+                // Test 2: Check if inheritance metadata functions exist
+                addTestResult(
+                    'Inheritance Metadata Functions Exist',
+                    typeof createInheritanceMetadata === 'function' && typeof resolveKeyframeInheritance === 'function',
+                    'Checking if inheritance metadata functions are loaded'
+                );
+
+                // Test 3: Test default values
+                try {
+                    const defaultFreq = getDefaultValue('frequency');
+                    const defaultVolume = getDefaultValue('volume');
+                    addTestResult(
+                        'Default Values',
+                        defaultFreq === 440 && defaultVolume === 0.5,
+                        `Default frequency: ${defaultFreq}, Default volume: ${defaultVolume}`,
+                        { frequency: defaultFreq, volume: defaultVolume }
+                    );
+                } catch (e) {
+                    addTestResult('Default Values', false, `Error: ${e.message}`);
+                }
+
+                // Test 4: Test inheritance metadata creation
+                try {
+                    const panelData = { frequency: 440, volume: 0.5, waveType: 'sine' };
+                    const previousData = { frequency: 400, volume: 0.5, waveType: 'sine' };
+                    const metadata = createInheritanceMetadata(panelData, previousData, false);
+
+                    addTestResult(
+                        'Inheritance Metadata Creation',
+                        metadata.frequency === false && metadata.volume === true && metadata.waveType === true,
+                        'Testing inheritance detection logic',
+                        { panelData, previousData, metadata }
+                    );
+                } catch (e) {
+                    addTestResult('Inheritance Metadata Creation', false, `Error: ${e.message}`);
+                }
+
+                // Test 5: Test keyframe system existence
+                addTestResult(
+                    'Keyframe System',
+                    typeof keyframes !== 'undefined' && typeof currentKeyframeIndex !== 'undefined',
+                    'Checking if keyframe system variables exist'
+                );
+
+                // Test 6: Test parameter update functions
+                addTestResult(
+                    'Enhanced Parameter Functions Exist',
+                    typeof makeParameterExplicit === 'function' && typeof updateParameterWithInheritance === 'function',
+                    'Checking if inheritance-aware parameter functions are loaded'
+                );
+
+                // Test 7: Initialize basic keyframes and test inheritance
+                try {
+                    // This would require the full application to be initialized
+                    if (typeof initializeKeyframes === 'function') {
+                        addTestInfo('Keyframe system appears to be available for testing');
+                    } else {
+                        addTestInfo('Keyframe system not fully initialized - this is expected in test mode');
+                    }
+                } catch (e) {
+                    addTestInfo(`Keyframe initialization test skipped: ${e.message}`);
+                }
+
+                // Test 8: Test UI function availability
+                addTestResult(
+                    'UI Functions Exist',
+                    typeof generateInheritanceUI === 'function' && typeof toggleInheritance === 'function',
+                    'Checking if inheritance UI functions are loaded'
+                );
+
+                const passedTests = testResults.filter(r => r.passed).length;
+                const totalTests = testResults.filter(r => r.hasOwnProperty('passed')).length;
+
+                addTestInfo(`Tests completed: ${passedTests}/${totalTests} passed`);
+
+            } catch (e) {
+                addTestResult('Test Suite', false, `Test suite error: ${e.message}`);
+            }
+        }
+
+        // Auto-run tests when page loads
+        window.addEventListener('load', () => {
+            setTimeout(runTests, 1000);
+        });
+    </script>
+</body>
+</html>
